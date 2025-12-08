@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
+import { BackgroundOrbits } from "@/components/BackgroundOrbits";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,8 +32,11 @@ export default function RootLayout({
       >
         <div className="flex min-h-screen flex-col">
           <Navbar />
-          <div className="flex-1 bg-gradient-to-b from-zinc-950 via-black to-zinc-950">
-            {children}
+          <div className="relative flex-1 overflow-hidden bg-gradient-to-b from-zinc-950 via-black to-zinc-950">
+            <div className="pointer-events-none absolute inset-0 -z-10">
+              <BackgroundOrbits />
+            </div>
+            <div className="relative z-10">{children}</div>
           </div>
           <Footer />
         </div>
