@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { getSupabaseClient } from "@/lib/supabaseClient";
 
 interface UserState {
   loading: boolean;
@@ -14,6 +14,8 @@ export function useUser(): UserState {
 
   useEffect(() => {
     let isMounted = true;
+
+    const supabase = getSupabaseClient();
 
     supabase.auth.getUser().then(({ data }) => {
       if (!isMounted) return;

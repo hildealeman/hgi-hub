@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { PageContainer } from "@/components/PageContainer";
 import { SectionTitle } from "@/components/SectionTitle";
 import { Card } from "@/components/Card";
-import { supabase } from "@/lib/supabaseClient";
+import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useUser } from "@/lib/useUser";
 
 export default function LoginPage() {
@@ -33,6 +33,7 @@ export default function LoginPage() {
 
     setSubmitting(true);
     try {
+      const supabase = getSupabaseClient();
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
