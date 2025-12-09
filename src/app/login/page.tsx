@@ -12,14 +12,17 @@ export default function LoginPage() {
   const router = useRouter();
   const { user } = useUser();
 
+  const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
+    setSuccess(null);
 
     if (!/.+@.+\..+/.test(email)) {
       setError("Esto no se ve como un correo válido, eh.");
@@ -34,20 +37,50 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       const supabase = getSupabaseClient();
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
 
-      if (signInError) {
-        setError(
-          "No pudimos iniciar sesión con esos datos. Checa correo/contraseña o crea la cuenta en Supabase.",
-        );
-        return;
+      if (mode === "login") {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (signInError) {
+          setError(
+            "No pudimos iniciar sesión con esos datos. Checa correo/contraseña o crea tu cuenta primero.",
+          );
+          return;
+        }
+
+        router.push("/");
+        router.refresh();
+      } else {
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+
+        if (signUpError) {
+          setError(
+            signUpError.message.includes("User already registered")
+              ? "Ya existe una cuenta con este correo. Intenta iniciar sesión."
+              : "No pudimos crear tu cuenta. Intenta de nuevo o usa otro correo.",
+          );
+          return;
+        }
+
+        if (!data.session) {
+          setSuccess(
+            "Cuenta creada. Revisa tu correo para confirmar tu cuenta antes de iniciar sesión.",
+          );
+        } else {
+          setSuccess("Cuenta creada e iniciada. Te mandamos al inicio.");
+          router.push("/");
+          router.refresh();
+        }
+
+        setEmail("");
+        setPassword("");
       }
-
-      router.push("/");
-      router.refresh();
     } catch (err) {
       console.error(err);
       setError("Algo salió mal… no debería, pero pasó. Intenta de nuevo, porfa.");
@@ -59,11 +92,11 @@ export default function LoginPage() {
   return (
     <PageContainer>
       <SectionTitle
-        title="Iniciar sesión"
-        eyebrow="auth sencilla, sin circo todavía"
+        title={mode === "login" ? "Iniciar sesión" : "Crear cuenta"}
+        eyebrow="auth sencilla, sin circo y sin humo"
       >
-        Este login usa Supabase Auth con correo y contraseña. Por ahora está pensado
-        para que la banda core del proyecto entre a futuras herramientas tipo /admin.
+        Este módulo usa Supabase Auth con correo y contraseña. Puedes iniciar sesión
+        si ya tienes cuenta o crear una nueva para sumarte a las herramientas HGI.
       </SectionTitle>
 
       <div className="grid gap-6 md:grid-cols-[3fr,2fr]">
@@ -75,6 +108,39 @@ export default function LoginPage() {
             </p>
           ) : (
             <form className="space-y-4" onSubmit={handleSubmit}>
+              <div className="inline-flex rounded-full border border-zinc-800 bg-zinc-950 p-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("login");
+                    setError(null);
+                    setSuccess(null);
+                  }}
+                  className={`rounded-full px-3 py-1 transition-colors ${
+                    mode === "login"
+                      ? "bg-zinc-50 text-black"
+                      : "text-zinc-300 hover:text-zinc-50"
+                  }`}
+                >
+                  Iniciar sesión
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("signup");
+                    setError(null);
+                    setSuccess(null);
+                  }}
+                  className={`rounded-full px-3 py-1 transition-colors ${
+                    mode === "signup"
+                      ? "bg-zinc-50 text-black"
+                      : "text-zinc-300 hover:text-zinc-50"
+                  }`}
+                >
+                  Crear cuenta
+                </button>
+              </div>
+
               <div className="space-y-1">
                 <label htmlFor="email" className="text-sm font-medium text-zinc-100">
                   Correo
@@ -109,13 +175,22 @@ export default function LoginPage() {
               </div>
 
               {error && <p className="text-sm text-rose-400">{error}</p>}
+              {success && !error && (
+                <p className="text-sm text-emerald-400">{success}</p>
+              )}
 
               <button
                 type="submit"
                 disabled={submitting}
                 className="inline-flex items-center justify-center rounded-full bg-zinc-50 px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {submitting ? "Entrando..." : "Iniciar sesión"}
+                {submitting
+                  ? mode === "login"
+                    ? "Entrando..."
+                    : "Creando cuenta..."
+                  : mode === "login"
+                    ? "Iniciar sesión"
+                    : "Crear cuenta"}
               </button>
             </form>
           )}
