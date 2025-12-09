@@ -1,8 +1,11 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
 import { PageContainer } from "@/components/PageContainer";
 import { Card } from "@/components/Card";
 import { SectionTitle } from "@/components/SectionTitle";
+import { QueEsHGICard } from "@/components/QueEsHGIDiscussion";
 
 export default function Home() {
   return (
@@ -58,17 +61,7 @@ export default function Home() {
           </p>
         </div>
         <div className="space-y-4">
-          <Card title="¿Qué es HGI?">
-            <p>
-              Human-Grounded Intelligence es una capa entre los modelos actuales y la
-              idea de AGI. No es otra buzzword: es una postura. Creamos sistemas que
-              parten del humano real, no de un usuario imaginario perfecto.
-            </p>
-            <p className="mt-3 text-xs text-zinc-400">
-              Traducción libre: dejamos de tratar al humano como un input ruidoso y lo
-              ponemos al centro del diseño.
-            </p>
-          </Card>
+          <QueEsHGICard />
           <Card title="¿Por qué importa?" subtle>
             <ul className="list-disc space-y-1 pl-5 text-sm">
               <li>Porque sin entender intención, cualquier modelo parece más tonto.</li>
