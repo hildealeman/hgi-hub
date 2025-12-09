@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { PageContainer } from "@/components/PageContainer";
 import { Card } from "@/components/Card";
 import { SectionTitle } from "@/components/SectionTitle";
@@ -8,9 +9,21 @@ export default function Home() {
     <PageContainer>
       <section className="grid gap-8 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-center">
         <div className="space-y-6">
-          <p className="text-xs font-medium uppercase tracking-[0.25em] text-zinc-500">
-            Human-Grounded Intelligence
-          </p>
+          <div className="flex items-center gap-3">
+            <div className="relative h-8 w-8 overflow-hidden rounded-full border border-zinc-800 bg-zinc-950/60">
+              <Image
+                src="/hgi-logo.png"
+                alt="Logo de HGI Hub"
+                fill
+                sizes="32px"
+                className="object-cover"
+                priority
+              />
+            </div>
+            <p className="text-xs font-medium uppercase tracking-[0.25em] text-zinc-500">
+              Human-Grounded Intelligence
+            </p>
+          </div>
           <h1 className="text-3xl font-semibold tracking-tight text-zinc-50 sm:text-4xl">
             Una ruta humana hacia la AGI.
           </h1>
