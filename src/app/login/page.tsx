@@ -19,6 +19,23 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const handleSignOut = async () => {
+    setError(null);
+    setSuccess(null);
+    setSubmitting(true);
+    try {
+      const supabase = getSupabaseClient();
+      await supabase.auth.signOut();
+      router.push("/");
+      router.refresh();
+    } catch (err) {
+      console.error(err);
+      setError("No pudimos cerrar tu sesión ahorita. Intenta de nuevo, porfa.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
@@ -92,20 +109,98 @@ export default function LoginPage() {
   return (
     <PageContainer>
       <SectionTitle
-        title={mode === "login" ? "Iniciar sesión" : "Crear cuenta"}
+        title={user ? "Tu sesión en HGI Hub" : mode === "login" ? "Iniciar sesión" : "Crear cuenta"}
         eyebrow="auth sencilla, sin circo y sin humo"
       >
-        Este módulo usa Supabase Auth con correo y contraseña. Puedes iniciar sesión
-        si ya tienes cuenta o crear una nueva para sumarte a las herramientas HGI.
+        {user
+          ? "Aquí ves el estado de tu sesión y cómo se conecta con los foros y herramientas HGI. Nada de panel corporativo infinito: solo lo que importa."
+          : "Este módulo usa Supabase Auth con correo y contraseña. Puedes iniciar sesión si ya tienes cuenta o crear una nueva para sumarte a las herramientas HGI."}
       </SectionTitle>
 
       <div className="grid gap-6 md:grid-cols-[3fr,2fr]">
         <Card title="Tu sesión HGI">
           {user ? (
-            <p className="text-sm text-emerald-400">
-              Ya tienes sesión iniciada con {user.email}. Luego montamos una vista
-              /admin para que esto tenga más sentido.
-            </p>
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/5 p-3 text-sm">
+                <p className="text-emerald-300" title="Sesión activa con Supabase Auth">
+                  Sesión activa con <span className="font-medium text-emerald-200">{user.email}</span>.
+                </p>
+                <p className="mt-1 text-xs text-emerald-200/80">
+                  Desde aquí puedes seguir explorando HGI Hub, participar en foros y luego montamos el /admin bonito.
+                </p>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3" aria-label="Resumen rápido de tu cuenta">
+                <div
+                  className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-3 text-xs"
+                  title="Conteo aproximado de topics en los que puedes participar"
+                >
+                  <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">
+                    Foros HGI
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold text-zinc-50">6+</p>
+                  <p className="mt-1 text-[11px] text-zinc-400">
+                    Conversaciones activas sobre HGI, prompts y comunidad.
+                  </p>
+                </div>
+
+                <div
+                  className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-3 text-xs"
+                  title="Aquí más adelante contaremos tus aportes reales"
+                >
+                  <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">
+                    Tus aportes
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold text-zinc-50">0</p>
+                  <p className="mt-1 text-[11px] text-zinc-400">
+                    Empieza dejando tu primer comentario en cualquier foro.
+                  </p>
+                </div>
+
+                <div
+                  className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-3 text-xs"
+                  title="Indicador simbólico de qué tan metido estás en HGI Hub"
+                >
+                  <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">
+                    Nivel HGI
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold text-zinc-50">Beta</p>
+                  <p className="mt-1 text-[11px] text-zinc-400">
+                    Por ahora todos estamos en fase beta humana, literal.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => router.push("/")}
+                  className="rounded-full border border-zinc-700 px-4 py-2 text-xs font-medium text-zinc-100 transition-colors hover:border-zinc-500"
+                >
+                  Ir al inicio
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.push("/prompt-101")}
+                  className="rounded-full border border-zinc-700 px-4 py-2 text-xs font-medium text-zinc-100 transition-colors hover:border-zinc-500"
+                  title="Explora los nuevos foros de Prompt Engineering HGI"
+                >
+                  Ver foros de prompts
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  disabled={submitting}
+                  className="rounded-full bg-zinc-50 px-4 py-2 text-xs font-medium text-black transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {submitting ? "Cerrando sesión..." : "Cerrar sesión"}
+                </button>
+              </div>
+
+              {error && (
+                <p className="text-sm text-rose-400">{error}</p>
+              )}
+            </div>
           ) : (
             <form className="space-y-4" onSubmit={handleSubmit}>
               <div className="inline-flex rounded-full border border-zinc-800 bg-zinc-950 p-1 text-xs">
@@ -200,12 +295,12 @@ export default function LoginPage() {
           <p className="text-sm">
             Más adelante montamos una sección /admin protegida para revisar
             suscripciones, contenido y métricas sin salirnos del browser. Por ahora,
-            este login es la puerta de entrada y la estructura para construir sobre
-            ella.
+            este login y este mini dashboard son la puerta de entrada y el mapa de
+            hacia dónde va HGI Hub.
           </p>
           <p className="mt-3 text-xs text-zinc-400">
-            Tip: crea usuarios desde el panel de Supabase para probar. Luego ya le
-            ponemos registro y recuperación de contraseña si hace sentido.
+            Tip: crea usuarios desde el panel de Supabase para probar. Luego le
+            vamos poniendo más niveles, métricas reales y vistas de moderación.
           </p>
         </Card>
       </div>

@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
+import { getSupabaseClient } from "@/lib/supabaseClient";
+import { useUser } from "@/lib/useUser";
 
 const navItems: { href: string; label: string }[] = [
   { href: "/", label: "Inicio" },
@@ -12,9 +15,26 @@ const navItems: { href: string; label: string }[] = [
   { href: "/comunidad", label: "Comunidad" },
   { href: "/whitepaper", label: "Whitepaper" },
 ];
-
 export function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user } = useUser();
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      const supabase = getSupabaseClient();
+      await supabase.auth.signOut();
+      router.push("/");
+      router.refresh();
+    } catch (err) {
+      console.error("Error al cerrar sesión", err);
+    } finally {
+      setSigningOut(false);
+    }
+  };
 
   return (
     <header className="border-b border-zinc-800 bg-black/80 text-zinc-50 backdrop-blur">
@@ -41,12 +61,23 @@ export function Navbar() {
             );
           })}
           <li>
-            <Link
-              href="/login"
-              className="rounded-full bg-zinc-50 px-3 py-1 text-xs font-medium text-black transition-colors hover:bg-zinc-200"
-            >
-              Iniciar sesión
-            </Link>
+            {user ? (
+              <button
+                type="button"
+                onClick={handleSignOut}
+                disabled={signingOut}
+                className="rounded-full bg-zinc-50 px-3 py-1 text-xs font-medium text-black transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {signingOut ? "Saliendo..." : "Salir"}
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                className="rounded-full bg-zinc-50 px-3 py-1 text-xs font-medium text-black transition-colors hover:bg-zinc-200"
+              >
+                Iniciar sesión
+              </Link>
+            )}
           </li>
         </ul>
       </nav>
