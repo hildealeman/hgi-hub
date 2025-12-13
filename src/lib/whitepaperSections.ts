@@ -1,7 +1,6 @@
 import "server-only";
 
-import { promises as fs } from "fs";
-import path from "path";
+import sectionsFile from "../../data/whitepaperSections.json";
 
 export interface WhitepaperSectionMeta {
   slug: string;
@@ -13,11 +12,8 @@ interface WhitepaperSectionsFile {
   sections: WhitepaperSectionMeta[];
 }
 
-const sectionsFilePath = path.join(process.cwd(), "data", "whitepaperSections.json");
-
 export async function getWhitepaperSectionsMeta(): Promise<WhitepaperSectionMeta[]> {
-  const raw = await fs.readFile(sectionsFilePath, "utf8");
-  const parsed = JSON.parse(raw) as WhitepaperSectionsFile;
+  const parsed = sectionsFile as WhitepaperSectionsFile;
 
   if (!parsed?.sections || !Array.isArray(parsed.sections)) {
     return [];
