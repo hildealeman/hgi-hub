@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { addComment, getThreadFor } from "@/lib/threads";
 
 export async function GET(
-  _request: Request,
-  context: { params: { section: string } }
+  _request: NextRequest,
+  context: { params: Promise<{ section: string }> }
 ) {
-  const { section } = context.params;
+  const { section } = await context.params;
 
   try {
     const thread = await getThreadFor(section);
@@ -20,10 +20,10 @@ export async function GET(
 }
 
 export async function POST(
-  request: Request,
-  context: { params: { section: string } }
+  request: NextRequest,
+  context: { params: Promise<{ section: string }> }
 ) {
-  const { section } = context.params;
+  const { section } = await context.params;
 
   try {
     const body = (await request.json()) as { content?: string; authorType?: "human" | "model" };

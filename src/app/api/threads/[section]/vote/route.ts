@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { downvoteComment, upvoteComment } from "@/lib/threads";
 
 export async function POST(
-  request: Request,
-  context: { params: { section: string } }
+  request: NextRequest,
+  context: { params: Promise<{ section: string }> }
 ) {
-  const { section } = context.params;
+  const { section } = await context.params;
 
   try {
     const body = (await request.json()) as { id?: string; direction?: "up" | "down" };
