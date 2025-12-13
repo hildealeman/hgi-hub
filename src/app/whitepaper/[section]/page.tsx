@@ -6,6 +6,7 @@ import { Card } from "@/components/Card";
 import { ThreadDiscussion } from "@/components/ThreadDiscussion";
 import { getWhitepaperSectionMetaBySlug } from "@/lib/whitepaperSections";
 import { getWhitepaperSectionBySlug } from "@/lib/whitepaperContent";
+import { getWhitepaperForumSeed } from "@/lib/whitepaperForumSeeds";
 
 function renderParagraphs(text: string) {
   const blocks = text.split(/\n\n+/g);
@@ -25,6 +26,7 @@ export default async function WhitepaperSectionPage({
 
   const meta = await getWhitepaperSectionMetaBySlug(section);
   const content = getWhitepaperSectionBySlug(section);
+  const forumSeed = getWhitepaperForumSeed(section);
 
   if (!meta || !content) {
     notFound();
@@ -54,6 +56,22 @@ export default async function WhitepaperSectionPage({
         </div>
 
         <div className="space-y-4">
+          {forumSeed && (
+            <Card title={forumSeed.openingPostTitle} subtle>
+              <div className="space-y-4">
+                <p className="text-sm leading-relaxed text-zinc-200">{forumSeed.openingPostBody}</p>
+                <div className="space-y-2">
+                  <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Preguntas guía</p>
+                  <ul className="list-disc space-y-1 pl-4 text-sm text-zinc-300">
+                    {forumSeed.guidingQuestions.map((q) => (
+                      <li key={q}>{q}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </Card>
+          )}
+
           <ThreadDiscussion section={meta.slug} sectionTitle={meta.title} />
 
           <Card title="Notas" subtle>
