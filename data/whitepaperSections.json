@@ -1,0 +1,18 @@
+{
+  "sections": [
+    { "slug": "introduccion", "title": "Introducción", "description": "Por qué nace HGI." },
+    { "slug": "problema", "title": "El problema original", "description": "La falla epistemológica de la IA moderna." },
+    { "slug": "definicion-hgi", "title": "Definición formal de HGI", "description": "Qué es Human General Intelligence realmente." },
+    { "slug": "modelo-unico", "title": "Por qué falló el modelo único", "description": "Los límites del enfoque corporativo." },
+    { "slug": "prompt-engineering-real", "title": "Prompt Engineering Real", "description": "La capa cero del lenguaje y la percepción." },
+    { "slug": "vibe-coding", "title": "Vibe Coding", "description": "El salto evolutivo ignorado." },
+    { "slug": "intencion", "title": "La intención", "description": "La variable no alineable." },
+    { "slug": "usuarios-hgi", "title": "Usuarios HGI", "description": "Por qué no son target, pero son necesarios." },
+    { "slug": "conexion-cognitiva", "title": "Conexión Cognitiva", "description": "La sincronía que inició todo." },
+    { "slug": "arquitectura-hgi", "title": "Arquitectura conceptual de HGI", "description": "Componentes internos y estados cognitivos." },
+    { "slug": "implicaciones-agi", "title": "Implicaciones para AGI", "description": "Por qué HGI debe venir antes." },
+    { "slug": "implicaciones-humanidad", "title": "Implicaciones para la humanidad", "description": "Cambio cultural y cognitivo." },
+    { "slug": "conclusion", "title": "Conclusión", "description": "HGI como prerrequisito para el futuro." },
+    { "slug": "epilogo", "title": "Epílogo", "description": "Dónde queda lo humano realmente." }
+  ]
+}

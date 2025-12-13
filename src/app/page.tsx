@@ -6,6 +6,7 @@ import { PageContainer } from "@/components/PageContainer";
 import { Card } from "@/components/Card";
 import { SectionTitle } from "@/components/SectionTitle";
 import { QueEsHGICard } from "@/components/QueEsHGIDiscussion";
+import { TopicDiscussionCard } from "@/components/TopicDiscussionCard";
 
 export default function Home() {
   return (
@@ -43,6 +44,12 @@ export default function Home() {
               Leer el manifiesto
             </Link>
             <Link
+              href="/whitepaper"
+              className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-100 transition-colors hover:border-zinc-500 hover:bg-zinc-900/60"
+            >
+              Leer el whitepaper
+            </Link>
+            <Link
               href="/prompt-101"
               className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-100 transition-colors hover:border-zinc-500 hover:bg-zinc-900/60"
             >
@@ -62,7 +69,14 @@ export default function Home() {
         </div>
         <div className="space-y-4">
           <QueEsHGICard />
-          <Card title="¿Por qué importa?" subtle>
+          <TopicDiscussionCard
+            slug="home-por-que-importa"
+            cardTitle="¿Por qué importa?"
+            cardEyebrow="poner al humano al centro"
+            cardSummary="Razones concretas de por qué HGI no es otra buzzword y sí cambia cómo usamos modelos."
+            modalTitle="¿Por qué importa HGI?"
+            modalIntro="Este foro es para discutir por qué la intención humana, el contexto y el bias importan más que cualquier slide de AGI futurista."
+          >
             <ul className="list-disc space-y-1 pl-5 text-sm">
               <li>Porque sin entender intención, cualquier modelo parece más tonto.</li>
               <li>
@@ -75,12 +89,19 @@ export default function Home() {
                 Porque la AGI sin humanos al centro es básicamente ciencia ficción barata.
               </li>
             </ul>
-          </Card>
+          </TopicDiscussionCard>
         </div>
       </section>
 
       <section className="grid gap-4 md:grid-cols-3">
-        <Card title="Manifiesto" subtle>
+        <TopicDiscussionCard
+          slug="home-manifiesto"
+          cardTitle="Manifiesto"
+          cardEyebrow="mapa conceptual HGI"
+          cardSummary="Principios y límites para hablar de AGI sin volarnos la barda."
+          modalTitle="Manifiesto HGI"
+          modalIntro="Aquí discutimos el mapa conceptual de HGI: qué sí, qué no, y por qué la base humana importa más que el hype de AGI."
+        >
           <p>
             El mapa conceptual de HGI: principios, límites y acuerdos básicos para no
             perder el piso cuando hablemos de AGI.
@@ -89,8 +110,16 @@ export default function Home() {
             Si llegas al final del manifiesto, estás oficialmente fuera del hype
             superficial.
           </p>
-        </Card>
-        <Card title="Prompt Engineering 101" subtle>
+        </TopicDiscussionCard>
+
+        <TopicDiscussionCard
+          slug="home-prompt-101"
+          cardTitle="Prompt Engineering 101"
+          cardEyebrow="versión HGI"
+          cardSummary="Cómo hablar con modelos como adulto funcional, no como post motivacional."
+          modalTitle="Prompt Engineering 101 (HGI)"
+          modalIntro="Este foro es para bajar a tierra cómo pedimos cosas a los modelos: rol, contexto, restricciones y consecuencias."
+        >
           <p>
             Guía sin humo para hablar con modelos como adulto funcional, no como post
             motivacional de LinkedIn.
@@ -98,8 +127,16 @@ export default function Home() {
           <p className="mt-2 text-xs text-zinc-400">
             Spoiler: "haz magia con mi código" no es un buen prompt.
           </p>
-        </Card>
-        <Card title="Comunidad" subtle>
+        </TopicDiscussionCard>
+
+        <TopicDiscussionCard
+          slug="home-comunidad"
+          cardTitle="Comunidad"
+          cardEyebrow="beta humana"
+          cardSummary="La banda que está probando, criticando y construyendo HGI Hub."
+          modalTitle="Comunidad HGI"
+          modalIntro="Espacio para coordinar, proponer y tirar ideas sobre cómo debería funcionar esta comunidad sin culto a la personalidad."
+        >
           <p>
             Gente construyendo, probando y tirando ideas sin culto a la personalidad.
             Menos héroes solitarios, más banda que comparte.
@@ -107,7 +144,7 @@ export default function Home() {
           <p className="mt-2 text-xs text-zinc-400">
             Te apuntas con tu correo, sin dramas. Si te vas, tampoco hacemos drama.
           </p>
-        </Card>
+        </TopicDiscussionCard>
       </section>
 
       <SectionTitle title="HGI en una frase" eyebrow="resumen rudo">
