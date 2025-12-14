@@ -24,19 +24,28 @@ export default async function WhitepaperSectionPage({
 }) {
   const { section } = params;
 
-  const meta = await getWhitepaperSectionMetaBySlug(section);
   const content = getWhitepaperSectionBySlug(section);
-  const forumSeed = getWhitepaperForumSeed(section);
+  const meta = await getWhitepaperSectionMetaBySlug(section);
 
-  if (!meta || !content) {
+  if (!content) {
     notFound();
   }
 
+  const resolvedMeta =
+    meta ??
+    ({
+      slug: content.slug,
+      title: content.title,
+      description: content.description,
+    } as const);
+
+  const forumSeed = getWhitepaperForumSeed(content.slug);
+
   return (
     <PageContainer>
-      <SectionTitle title={meta.title} eyebrow="foro por sección">
+      <SectionTitle title={resolvedMeta.title} eyebrow="foro por sección">
         <div className="space-y-2">
-          <p className="text-sm text-zinc-300">{meta.description}</p>
+          <p className="text-sm text-zinc-300">{resolvedMeta.description}</p>
           <Link
             href="/whitepaper"
             className="text-xs text-zinc-300 underline underline-offset-4 hover:text-zinc-50"
@@ -72,11 +81,11 @@ export default async function WhitepaperSectionPage({
             </Card>
           )}
 
-          <ThreadDiscussion section={meta.slug} sectionTitle={meta.title} />
+          <ThreadDiscussion section={content.slug} sectionTitle={resolvedMeta.title} />
 
           <Card title="Notas" subtle>
             <p className="text-sm text-zinc-300">
-              Este foro guarda comentarios/votos en JSON bajo <code className="text-zinc-100">data/threads/{meta.slug}.json</code>.
+              Este foro guarda comentarios/votos en JSON bajo <code className="text-zinc-100">data/threads/{content.slug}.json</code>.
               En algunos deploys (serverless) el filesystem puede ser read-only; en ese caso el API regresa error controlado.
             </p>
           </Card>

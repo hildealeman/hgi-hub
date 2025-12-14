@@ -24,6 +24,17 @@ function renderParagraphs(text: string) {
 
 export default async function WhitepaperPage() {
   const sectionsMeta = await getWhitepaperSectionsMeta();
+  const resolvedSectionsMeta =
+    sectionsMeta.length > 0
+      ? sectionsMeta
+      : whitepaperSections
+          .slice()
+          .sort((a, b) => a.order - b.order)
+          .map((sec) => ({
+            slug: sec.slug,
+            title: sec.title,
+            description: sec.description,
+          }));
 
   return (
     <PageContainer>
@@ -43,7 +54,7 @@ export default async function WhitepaperPage() {
               abrir discusión por sección.
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {sectionsMeta.map((sec) => (
+              {resolvedSectionsMeta.map((sec) => (
                 <Link
                   key={sec.slug}
                   href={`/whitepaper/${sec.slug}`}
