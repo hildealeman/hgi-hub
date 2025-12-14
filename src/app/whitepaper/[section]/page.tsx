@@ -24,14 +24,16 @@ export async function generateStaticParams(): Promise<Array<{ section: string }>
 export default async function WhitepaperSectionPage({
   params,
 }: {
-  params: { section: string };
+  params: { section: string } | Promise<{ section: string }>;
 }) {
-  const sectionSlug = decodeURIComponent(params.section).trim().toLowerCase();
+  const resolvedParams = await Promise.resolve(params);
+  const rawSection = resolvedParams.section;
+  const sectionSlug = decodeURIComponent(rawSection ?? "").trim().toLowerCase();
 
   const content = getWhitepaperSectionBySlug(sectionSlug);
   const meta = await getWhitepaperSectionMetaBySlug(sectionSlug);
 
-  if (!content) {
+  if (!rawSection || !content) {
     return (
       <PageContainer>
         <SectionTitle title="Sección no encontrada" eyebrow="whitepaper">
