@@ -5,7 +5,7 @@ import { SectionTitle } from "@/components/SectionTitle";
 import { Card } from "@/components/Card";
 import { ThreadDiscussion } from "@/components/ThreadDiscussion";
 import { getWhitepaperSectionMetaBySlug } from "@/lib/whitepaperSections";
-import { getWhitepaperSectionBySlug } from "@/lib/whitepaperContent";
+import { getWhitepaperSectionBySlug, whitepaperSections } from "@/lib/whitepaperContent";
 import { getWhitepaperForumSeed } from "@/lib/whitepaperForumSeeds";
 
 function renderParagraphs(text: string) {
@@ -17,15 +17,19 @@ function renderParagraphs(text: string) {
   ));
 }
 
+export async function generateStaticParams(): Promise<Array<{ section: string }>> {
+  return whitepaperSections.map((s) => ({ section: s.slug }));
+}
+
 export default async function WhitepaperSectionPage({
   params,
 }: {
   params: { section: string };
 }) {
-  const { section } = params;
+  const sectionSlug = decodeURIComponent(params.section).trim().toLowerCase();
 
-  const content = getWhitepaperSectionBySlug(section);
-  const meta = await getWhitepaperSectionMetaBySlug(section);
+  const content = getWhitepaperSectionBySlug(sectionSlug);
+  const meta = await getWhitepaperSectionMetaBySlug(sectionSlug);
 
   if (!content) {
     notFound();
