@@ -1,6 +1,7 @@
 import "server-only";
 
 import { promises as fs } from "fs";
+import os from "os";
 import path from "path";
 
 export type ThreadAuthorType = "human" | "model";
@@ -19,14 +20,28 @@ export interface ThreadData {
   comments: ThreadComment[];
 }
 
-const THREADS_DIR = path.join(process.cwd(), "data", "threads");
+const PRIMARY_THREADS_DIR = path.join(process.cwd(), "data", "threads");
+let resolvedThreadsDir: string | null = null;
 
 function threadPath(section: string): string {
-  return path.join(THREADS_DIR, `${section}.json`);
+  const dir = resolvedThreadsDir ?? PRIMARY_THREADS_DIR;
+  return path.join(dir, `${section}.json`);
 }
 
-async function ensureDir(): Promise<void> {
-  await fs.mkdir(THREADS_DIR, { recursive: true });
+async function ensureDir(): Promise<string> {
+  if (resolvedThreadsDir) return resolvedThreadsDir;
+
+  try {
+    await fs.mkdir(PRIMARY_THREADS_DIR, { recursive: true });
+    resolvedThreadsDir = PRIMARY_THREADS_DIR;
+    return resolvedThreadsDir;
+  } catch (error) {
+    const tmpDir = path.join(os.tmpdir(), "hgi-hub", "threads");
+    await fs.mkdir(tmpDir, { recursive: true });
+    resolvedThreadsDir = tmpDir;
+    console.warn("[HGI Hub] Falling back to tmp threads dir:", tmpDir, error);
+    return resolvedThreadsDir;
+  }
 }
 
 function newId(): string {
@@ -34,7 +49,12 @@ function newId(): string {
 }
 
 export async function getThreadFor(section: string): Promise<ThreadData> {
-  await ensureDir();
+  try {
+    await ensureDir();
+  } catch {
+    return { section, comments: [] };
+  }
+
   const file = threadPath(section);
 
   try {
