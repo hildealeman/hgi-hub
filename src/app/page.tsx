@@ -76,7 +76,7 @@ export default function Home() {
               Comunidad HGI
             </Link>
             <Link
-              href="/conversacion"
+              href="/whitepaper/hgi-chamber"
               className="rounded-full border border-indigo-700 px-4 py-2 text-sm text-indigo-200 transition-colors hover:bg-indigo-900/40 hover:border-indigo-500"
             >
               Conversación en vivo
