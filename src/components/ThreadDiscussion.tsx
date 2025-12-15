@@ -147,7 +147,7 @@ export function ThreadDiscussion({ section, sectionTitle }: ThreadDiscussionProp
   return (
     <Card title="Foro de esta sección" subtle>
       <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <p className="text-xs text-zinc-400">
             Thread: <span className="font-medium text-zinc-200">{section}</span>
           </p>
@@ -155,7 +155,7 @@ export function ThreadDiscussion({ section, sectionTitle }: ThreadDiscussionProp
             type="button"
             onClick={handleModelComment}
             disabled={modelLoading}
-            className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-200 transition-colors hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-full border border-zinc-700 px-3 py-2 text-xs text-zinc-200 transition-colors hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:py-1"
           >
             {modelLoading ? "Generando comentario…" : "Pedir comentario del modelo"}
           </button>
@@ -172,12 +172,12 @@ export function ThreadDiscussion({ section, sectionTitle }: ThreadDiscussionProp
             className="mt-2 w-full resize-none rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-50 outline-none placeholder:text-zinc-500 focus:border-zinc-500"
             placeholder="Trae una crítica, una pregunta o un contraejemplo. Sin humo."
           />
-          <div className="mt-2 flex flex-wrap items-center gap-2">
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             <button
               type="button"
               onClick={handlePost}
               disabled={posting || !draft.trim()}
-              className="rounded-full bg-zinc-50 px-3 py-1 text-xs font-medium text-black transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-full bg-zinc-50 px-3 py-2 text-xs font-medium text-black transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:py-1"
             >
               {posting ? "Publicando…" : "Publicar"}
             </button>
@@ -185,7 +185,7 @@ export function ThreadDiscussion({ section, sectionTitle }: ThreadDiscussionProp
               type="button"
               onClick={load}
               disabled={loading}
-              className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-200 transition-colors hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-full border border-zinc-700 px-3 py-2 text-xs text-zinc-200 transition-colors hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:py-1"
             >
               {loading ? "Refrescando…" : "Refrescar"}
             </button>
@@ -200,23 +200,25 @@ export function ThreadDiscussion({ section, sectionTitle }: ThreadDiscussionProp
           {thread &&
             ordered.map((c) => (
               <div key={c.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
                     <p className="text-xs font-medium text-zinc-200">
                       {c.authorType === "model" ? "Modelo HGI" : "Humano"}
                     </p>
-                    <p className="mt-2 whitespace-pre-wrap text-xs text-zinc-100 sm:text-sm">{c.content}</p>
+                    <p className="mt-2 whitespace-pre-wrap break-words text-xs text-zinc-100 sm:text-sm">
+                      {c.content}
+                    </p>
                   </div>
-                  <div className="flex flex-col items-end gap-2">
-                    <p className="text-[11px] text-zinc-500">
+                  <div className="flex flex-col gap-2 sm:items-end">
+                    <p className="text-[11px] text-zinc-500 sm:text-right">
                       ▲ {c.upvotes} · ▼ {c.downvotes}
                     </p>
-                    <div className="flex items-center gap-2">
+                    <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-end">
                       <button
                         type="button"
                         onClick={() => handleVote(c.id, "up")}
                         disabled={!!votingId}
-                        className="rounded-full border border-zinc-700 px-2 py-1 text-[11px] text-zinc-200 transition-colors hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="w-full rounded-full border border-zinc-700 px-2 py-2 text-[11px] text-zinc-200 transition-colors hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:py-1"
                       >
                         Upvote
                       </button>
@@ -224,7 +226,7 @@ export function ThreadDiscussion({ section, sectionTitle }: ThreadDiscussionProp
                         type="button"
                         onClick={() => handleVote(c.id, "down")}
                         disabled={!!votingId}
-                        className="rounded-full border border-zinc-700 px-2 py-1 text-[11px] text-zinc-200 transition-colors hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="w-full rounded-full border border-zinc-700 px-2 py-2 text-[11px] text-zinc-200 transition-colors hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:py-1"
                       >
                         Downvote
                       </button>
