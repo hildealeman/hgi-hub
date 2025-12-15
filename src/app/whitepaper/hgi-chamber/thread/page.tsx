@@ -1,31 +1,41 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { createClient } from "@supabase/supabase-js";
-
-// Initialize Supabase client (client-side)
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { Suspense, useState, useEffect, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function ThreadPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="max-w-3xl mx-auto p-8 space-y-8">
+          <h1 className="text-3xl font-bold">HGI Cognitive Thread</h1>
+          <p className="text-gray-400">Cargando…</p>
+        </div>
+      }
+    >
+      <ThreadPageInner />
+    </Suspense>
+  );
+}
+
+function ThreadPageInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [threadTitle, setThreadTitle] = useState("");
   const [threadId, setThreadId] = useState<string | null>(null);
+  const [threads, setThreads] = useState<any[]>([]);
   const [comments, setComments] = useState<any[]>([]);
   const [input, setInput] = useState("");
-  const [selectedEmotion, setSelectedEmotion] = useState("");
   const [loadingThread, setLoadingThread] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
+  const [loadingThreads, setLoadingThreads] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const emotions = [
-    { key: "love", label: "❤️ Love" },
-    { key: "doubt", label: "❓ Doubt" },
-    { key: "anger", label: "🔥 Anger" },
-    { key: "support", label: "🤝 Support" },
-    { key: "insight", label: "💡 Insight" },
-    { key: "clarity", label: "✨ Clarity" },
-  ];
+  const threadIdFromUrl = useMemo(() => {
+    const raw = searchParams.get("id");
+    return raw && raw.trim() ? raw.trim() : null;
+  }, [searchParams]);
 
   // ────────────────────────────────────────────────
   // 1. Create thread
@@ -34,27 +44,59 @@ export default function ThreadPage() {
     if (!threadTitle.trim()) return;
     setLoadingThread(true);
 
+    setError(null);
+
     const {
       data: { user },
     } = await supabase.auth.getUser();
+
+    if (!user) {
+      setError("Necesitas iniciar sesión para crear un thread.");
+      setLoadingThread(false);
+      return;
+    }
 
     const { data, error } = await supabase
       .from("threads")
       .insert({
         title: threadTitle,
-        created_by: user?.id || null,
+        created_by: user.id,
       })
-      .select()
+      .select("id, title, created_by, created_at")
       .single();
 
     if (error) {
       console.error("Error creating thread:", error);
+      setError("No pudimos crear el thread.");
       setLoadingThread(false);
       return;
     }
 
     setThreadId(data.id);
+    router.replace(`/whitepaper/hgi-chamber/thread?id=${encodeURIComponent(data.id)}`);
+    setThreadTitle("");
     setLoadingThread(false);
+  };
+
+  const fetchThreads = async () => {
+    setLoadingThreads(true);
+    setError(null);
+    try {
+      const { data, error } = await supabase
+        .from("threads")
+        .select("id, title, created_by, created_at")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching threads:", error);
+        setError("No pudimos cargar los threads.");
+        return;
+      }
+
+      setThreads(data ?? []);
+    } finally {
+      setLoadingThreads(false);
+    }
   };
 
   // ────────────────────────────────────────────────
@@ -64,15 +106,17 @@ export default function ThreadPage() {
     if (!threadId) return;
 
     setLoadingComments(true);
+    setError(null);
 
     const { data, error } = await supabase
       .from("comments")
-      .select("*")
+      .select("id, thread_id, parent_comment_id, created_by, text, created_at")
       .eq("thread_id", threadId)
       .order("created_at", { ascending: true });
 
     if (error) {
       console.error("Error fetching comments:", error);
+      setError("No pudimos cargar los comentarios.");
       setLoadingComments(false);
       return;
     }
@@ -82,7 +126,42 @@ export default function ThreadPage() {
   };
 
   useEffect(() => {
+    if (threadIdFromUrl && threadIdFromUrl !== threadId) {
+      setThreadId(threadIdFromUrl);
+    }
+
+    if (!threadIdFromUrl) {
+      setThreadId(null);
+      fetchThreads();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadIdFromUrl]);
+
+  useEffect(() => {
+    if (!threadId) return;
+
     fetchComments();
+
+    const channel = supabase
+      .channel(`comments:${threadId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "comments",
+          filter: `thread_id=eq.${threadId}`,
+        },
+        () => {
+          fetchComments();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threadId]);
 
   // ────────────────────────────────────────────────
@@ -91,38 +170,35 @@ export default function ThreadPage() {
   const addComment = async () => {
     if (!input.trim() || !threadId) return;
 
+    setError(null);
+
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    const start = Date.now();
+    if (!user) {
+      setError("Necesitas iniciar sesión para comentar.");
+      return;
+    }
 
     const { data, error } = await supabase
       .from("comments")
       .insert({
         thread_id: threadId,
+        parent_comment_id: null,
         text: input,
-        emotion: selectedEmotion || null,
-        created_by: user?.id || null,
-        response_time_ms: 0,
+        created_by: user.id,
       })
-      .select()
+      .select("id, thread_id, parent_comment_id, created_by, text, created_at")
       .single();
 
     if (error) {
       console.error("Error adding comment:", error);
+      setError("No pudimos guardar tu comentario.");
       return;
     }
 
-    // Update response time
-    const rt = Date.now() - start;
-    await supabase
-      .from("comments")
-      .update({ response_time_ms: rt })
-      .eq("id", data.id);
-
     setInput("");
-    setSelectedEmotion("");
     fetchComments();
   };
 
@@ -132,26 +208,29 @@ export default function ThreadPage() {
   const addReply = async (parentId: string, replyText: string) => {
     if (!replyText.trim() || !threadId) return;
 
+    setError(null);
+
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    const start = Date.now();
+    if (!user) {
+      setError("Necesitas iniciar sesión para responder.");
+      return;
+    }
 
-    await supabase.from("comments").insert({
+    const { error } = await supabase.from("comments").insert({
       thread_id: threadId,
       parent_comment_id: parentId,
       text: replyText,
-      created_by: user?.id || null,
-      response_time_ms: 0,
+      created_by: user.id,
     });
 
-    const rt = Date.now() - start;
-
-    await supabase
-      .from("comments")
-      .update({ response_time_ms: rt })
-      .eq("parent_comment_id", parentId);
+    if (error) {
+      console.error("Error adding reply:", error);
+      setError("No pudimos guardar tu respuesta.");
+      return;
+    }
 
     fetchComments();
   };
@@ -185,6 +264,8 @@ export default function ThreadPage() {
     <div className="max-w-3xl mx-auto p-8 space-y-8">
       <h1 className="text-3xl font-bold">HGI Cognitive Thread</h1>
 
+      {error && <p className="text-sm text-red-400">{error}</p>}
+
       {!threadId && (
         <div className="space-y-3">
           <input
@@ -199,6 +280,33 @@ export default function ThreadPage() {
           >
             {loadingThread ? "Creando…" : "Crear Thread"}
           </button>
+
+          <div className="pt-4">
+            <h2 className="text-lg font-semibold text-white">Threads</h2>
+            {loadingThreads ? (
+              <p className="text-gray-400">Cargando threads…</p>
+            ) : (
+              <div className="mt-2 space-y-2">
+                {threads.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => router.push(`/whitepaper/hgi-chamber/thread?id=${encodeURIComponent(t.id)}`)}
+                    className="w-full rounded border border-gray-700 bg-gray-900 px-3 py-2 text-left text-white hover:bg-gray-800"
+                  >
+                    <div className="text-sm font-medium">{t.title}</div>
+                    <div className="text-xs text-gray-400">
+                      {t.created_at ? new Date(t.created_at).toLocaleString() : ""}
+                    </div>
+                  </button>
+                ))}
+
+                {!loadingThreads && threads.length === 0 && (
+                  <p className="text-gray-400">Todavía no hay threads.</p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -211,22 +319,6 @@ export default function ThreadPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
           />
-
-          <div className="flex flex-wrap gap-2">
-            {emotions.map((emo) => (
-              <button
-                key={emo.key}
-                onClick={() => setSelectedEmotion(emo.key)}
-                className={`px-3 py-1 rounded border ${
-                  selectedEmotion === emo.key
-                    ? "bg-purple-600 border-purple-400"
-                    : "bg-gray-800 border-gray-600"
-                }`}
-              >
-                {emo.label}
-              </button>
-            ))}
-          </div>
 
           <button
             onClick={addComment}
@@ -241,7 +333,11 @@ export default function ThreadPage() {
               <p className="text-gray-400">Cargando comentarios…</p>
             ) : (
               comments.map((c) => (
-                <CommentCard key={c.id} comment={c} addReply={addReply} />
+                <CommentCard
+                  key={c.id}
+                  comment={c}
+                  addReply={addReply}
+                />
               ))
             )}
           </div>
@@ -262,9 +358,6 @@ function CommentCard({ comment, addReply }: any) {
     <div className="border border-gray-700 p-4 rounded bg-gray-800 space-y-3">
       <div className="flex justify-between items-center">
         <p className="text-white">{comment.text}</p>
-        {comment.emotion && (
-          <span className="text-lg">{emotionToEmoji(comment.emotion)}</span>
-        )}
       </div>
 
       <div className="text-xs text-gray-400">
@@ -304,17 +397,4 @@ function CommentCard({ comment, addReply }: any) {
       </div>
     </div>
   );
-}
-
-// Emotion mapping
-function emotionToEmoji(e: string) {
-  const map: any = {
-    love: "❤️",
-    doubt: "❓",
-    anger: "🔥",
-    support: "🤝",
-    insight: "💡",
-    clarity: "✨",
-  };
-  return map[e] || "💭";
 }

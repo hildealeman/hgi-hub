@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { PageContainer } from "@/components/PageContainer";
 import { SectionTitle } from "@/components/SectionTitle";
 import { Card } from "@/components/Card";
-import { getSupabaseClient } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabaseClient";
 import { useUser } from "@/lib/useUser";
 
 export default function LoginClient() {
@@ -34,7 +34,6 @@ export default function LoginClient() {
     setSuccess(null);
     setSubmitting(true);
     try {
-      const supabase = getSupabaseClient();
       await supabase.auth.signOut();
       router.push("/");
       router.refresh();
@@ -63,8 +62,6 @@ export default function LoginClient() {
 
     setSubmitting(true);
     try {
-      const supabase = getSupabaseClient();
-
       if (mode === "login") {
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email,

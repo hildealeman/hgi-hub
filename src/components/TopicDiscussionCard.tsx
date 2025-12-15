@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/Card";
-import { getSupabaseClient } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabaseClient";
 import { useUser } from "@/lib/useUser";
 
 type Origin = "original" | "ai_accepted" | "edited_after_ai" | "debated_with_ai";
@@ -77,8 +77,6 @@ export function TopicDiscussionCard({
       setLoadingPosts(true);
       setError(null);
       try {
-        const supabase = getSupabaseClient();
-
         const { data: topic, error: topicError } = await supabase
           .from("topics")
           .select("id")
@@ -151,8 +149,6 @@ export function TopicDiscussionCard({
     setLoading(true);
     setError(null);
     try {
-      const supabase = getSupabaseClient();
-
       const { data: topic, error: topicError } = await supabase
         .from("topics")
         .select("id")

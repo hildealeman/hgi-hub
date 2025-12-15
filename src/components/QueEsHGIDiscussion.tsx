@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/Card";
-import { getSupabaseClient } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabaseClient";
 import { useUser } from "@/lib/useUser";
 
 type Origin = "original" | "ai_accepted" | "edited_after_ai" | "debated_with_ai";
@@ -60,8 +60,6 @@ export function QueEsHGICard() {
       setLoadingPosts(true);
       setError(null);
       try {
-        const supabase = getSupabaseClient();
-
         // Buscar topic por slug
         const { data: topic, error: topicError } = await supabase
           .from("topics")
@@ -136,8 +134,6 @@ export function QueEsHGICard() {
     setLoading(true);
     setError(null);
     try {
-      const supabase = getSupabaseClient();
-
       const { data: topic, error: topicError } = await supabase
         .from("topics")
         .select("id")

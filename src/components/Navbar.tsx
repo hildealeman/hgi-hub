@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { getSupabaseClient } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabaseClient";
 import { useUser } from "@/lib/useUser";
 
 const navItems: { href: string; label: string }[] = [
@@ -27,7 +27,6 @@ export function Navbar() {
   }, [pathname]);
 
   const handleSignOut = async () => {
-    const supabase = getSupabaseClient();
     await supabase.auth.signOut();
     router.refresh();
     setMobileOpen(false);

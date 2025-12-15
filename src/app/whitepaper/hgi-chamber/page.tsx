@@ -3,10 +3,42 @@
 // HGI Cognitive Chamber – Core Page
 // This is the central interface for reflection, dialog, annotation, and dataset formation.
 
-import React from "react";
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function HGICognitiveChamber() {
+  const [threads, setThreads] = useState<any[]>([]);
+  const [loadingThreads, setLoadingThreads] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoadingThreads(true);
+      setError(null);
+      try {
+        const { data, error } = await supabase
+          .from("threads")
+          .select("id, title, created_at")
+          .order("created_at", { ascending: false });
+
+        if (error) {
+          console.error("Error fetching threads:", error);
+          setError("No pudimos cargar los threads.");
+          return;
+        }
+
+        setThreads(data ?? []);
+      } finally {
+        setLoadingThreads(false);
+      }
+    };
+
+    load();
+  }, []);
+
   return (
     <main className="max-w-4xl mx-auto py-16 px-6 space-y-12">
       {/* HEADER */}
@@ -51,6 +83,35 @@ export default function HGICognitiveChamber() {
           >
             Abrir Cámara de Interacción
           </Link>
+        </div>
+
+        <div className="rounded-lg border p-6 bg-white dark:bg-neutral-900 space-y-3">
+          <p className="font-medium">Threads recientes:</p>
+          {error && <p className="text-sm text-red-500">{error}</p>}
+          {loadingThreads ? (
+            <p className="text-sm text-neutral-600 dark:text-neutral-300">Cargando…</p>
+          ) : (
+            <div className="space-y-2">
+              {threads.map((t) => (
+                <Link
+                  key={t.id}
+                  href={`/whitepaper/hgi-chamber/thread?id=${encodeURIComponent(t.id)}`}
+                  className="block rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-900 hover:bg-neutral-100 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 dark:hover:bg-neutral-900"
+                >
+                  <div className="font-medium">{t.title}</div>
+                  <div className="text-xs text-neutral-500 dark:text-neutral-400">
+                    {t.created_at ? new Date(t.created_at).toLocaleString() : ""}
+                  </div>
+                </Link>
+              ))}
+
+              {threads.length === 0 && (
+                <p className="text-sm text-neutral-600 dark:text-neutral-300">
+                  Todavía no hay threads.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </section>
 

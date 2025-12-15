@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { createServerClient } from "@supabase/ssr";
 import type { RolSuscripcion } from "@/types";
 
 interface Body {
@@ -10,6 +10,31 @@ interface Body {
 
 function isValidEmail(email: string): boolean {
   return /.+@.+\..+/.test(email);
+}
+
+function getServerSupabase() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      "[HGI Hub] Faltan NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY en el entorno."
+    );
+  }
+
+  return createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      get() {
+        return undefined;
+      },
+      set() {
+        // no-op (esta ruta no depende de auth)
+      },
+      remove() {
+        // no-op
+      },
+    },
+  });
 }
 
 export async function POST(request: Request) {
@@ -31,11 +56,16 @@ export async function POST(request: Request) {
       );
     }
 
-    await db.suscripciones.create({
+    const supabase = getServerSupabase();
+    const { error } = await supabase.from("suscripciones").insert({
       email,
-      nombre,
+      nombre: nombre ?? null,
       rol,
     });
+
+    if (error) {
+      throw error;
+    }
 
     return NextResponse.json(
       {
