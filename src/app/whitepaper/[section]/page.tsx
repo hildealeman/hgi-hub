@@ -34,38 +34,7 @@ export default async function WhitepaperSectionPage({
   const meta = await getWhitepaperSectionMetaBySlug(sectionSlug);
 
   if (!rawSection || !content) {
-    return (
-      <PageContainer>
-        <SectionTitle title="Sección no encontrada" eyebrow="whitepaper">
-          <div className="space-y-2">
-            <p className="text-sm text-zinc-300">
-              Slug solicitado: <span className="font-medium text-zinc-100">{sectionSlug}</span>
-            </p>
-            <Link
-              href="/whitepaper"
-              className="text-xs text-zinc-300 underline underline-offset-4 hover:text-zinc-50"
-            >
-              ← Volver al whitepaper completo
-            </Link>
-          </div>
-        </SectionTitle>
-
-        <Card title="Slugs disponibles" subtle>
-          <ul className="list-disc space-y-1 pl-4 text-sm text-zinc-300">
-            {whitepaperSections
-              .slice()
-              .sort((a, b) => a.order - b.order)
-              .map((s) => (
-                <li key={s.slug}>
-                  <Link href={`/whitepaper/${s.slug}`} className="underline underline-offset-4 hover:text-zinc-50">
-                    {s.slug}
-                  </Link>
-                </li>
-              ))}
-          </ul>
-        </Card>
-      </PageContainer>
-    );
+    notFound();
   }
 
   const resolvedMeta =
@@ -95,9 +64,7 @@ export default async function WhitepaperSectionPage({
       <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="space-y-4">
           <Card title="Texto de la sección" subtle>
-            <div className="space-y-4 whitespace-pre-wrap">
-              {renderParagraphs(content.content)}
-            </div>
+            <div className="space-y-4 whitespace-pre-wrap">{renderParagraphs(content.content)}</div>
           </Card>
         </div>
 
