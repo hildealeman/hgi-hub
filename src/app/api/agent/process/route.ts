@@ -62,9 +62,9 @@ export async function GET() {
 
         const { error: insertError } = await supabase.from("comments").insert({
           thread_id: task.thread_id,
-          parent_comment_id: task.parent_comment_id,
-          text: responseText,
-          created_by: task.model_agent_id,
+          parent_id: task.parent_comment_id,
+          content: responseText,
+          author_id: task.model_agent_id,
         });
 
         if (insertError) {

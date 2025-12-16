@@ -233,7 +233,7 @@ function ThreadPageInner() {
 
     const { data, error } = await supabase
       .from("comments")
-      .select("id, thread_id, parent_comment_id, created_by, text, created_at")
+      .select("id, thread_id, parent_id, author_id, content, created_at")
       .eq("thread_id", threadId)
       .order("created_at", { ascending: true });
 
@@ -248,7 +248,7 @@ function ThreadPageInner() {
     setLoadingComments(false);
   };
 
-  const callAgentMention = async (parentCommentId: string, text: string) => {
+  const callAgentMention = async (parentCommentId: string, content: string) => {
     if (!threadId) return;
     try {
       await fetch("/api/agent/mention", {
@@ -257,7 +257,7 @@ function ThreadPageInner() {
         body: JSON.stringify({
           thread_id: threadId,
           parent_comment_id: parentCommentId,
-          text,
+          content,
         }),
       });
     } catch {
@@ -395,11 +395,11 @@ function ThreadPageInner() {
       .from("comments")
       .insert({
         thread_id: threadId,
-        parent_comment_id: null,
-        text: input,
-        created_by: user.id,
+        parent_id: null,
+        content: input,
+        author_id: user.id,
       })
-      .select("id, thread_id, parent_comment_id, created_by, text, created_at")
+      .select("id, thread_id, parent_id, author_id, content, created_at")
       .single();
 
     if (error) {
@@ -409,7 +409,7 @@ function ThreadPageInner() {
     }
 
     setInput("");
-    await callAgentMention(data.id, data.text);
+    await callAgentMention(data.id, data.content);
     fetchComments();
   };
 
@@ -430,12 +430,16 @@ function ThreadPageInner() {
       return;
     }
 
-    const { error } = await supabase.from("comments").insert({
-      thread_id: threadId,
-      parent_comment_id: parentId,
-      text: replyText,
-      created_by: user.id,
-    });
+    const { data: inserted, error } = await supabase
+      .from("comments")
+      .insert({
+        thread_id: threadId,
+        parent_id: parentId,
+        content: replyText,
+        author_id: user.id,
+      })
+      .select("id, content")
+      .maybeSingle();
 
     if (error) {
       console.error("Error adding reply:", error);
@@ -443,23 +447,8 @@ function ThreadPageInner() {
       return;
     }
 
-    try {
-      const { data: created } = await supabase
-        .from("comments")
-        .select("id, text")
-        .eq("thread_id", threadId)
-        .eq("parent_comment_id", parentId)
-        .eq("created_by", user.id)
-        .eq("text", replyText)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (created?.id && typeof created.text === "string") {
-        await callAgentMention(created.id, created.text);
-      }
-    } catch {
-      // ignore
+    if (inserted?.id && typeof inserted.content === "string") {
+      await callAgentMention(inserted.id, inserted.content);
     }
 
     fetchComments();
@@ -475,7 +464,7 @@ function ThreadPageInner() {
     const createdByIds = Array.from(
       new Set(
         (list ?? [])
-          .map((c) => c.created_by)
+          .map((c) => c.author_id)
           .filter((id) => typeof id === "string" && id)
       )
     ) as string[];
@@ -552,15 +541,15 @@ function ThreadPageInner() {
     }
 
     list.forEach((c) => {
-      const profile = typeof c.created_by === "string" ? profileById.get(c.created_by) ?? null : null;
-      const agent = typeof c.created_by === "string" ? agentById.get(c.created_by) ?? null : null;
+      const profile = typeof c.author_id === "string" ? profileById.get(c.author_id) ?? null : null;
+      const agent = typeof c.author_id === "string" ? agentById.get(c.author_id) ?? null : null;
       const totals = interactionsByCommentId.get(c.id) ?? { likes: 0, dislikes: 0 };
       map[c.id] = { ...c, profile, agent, likes: totals.likes, dislikes: totals.dislikes, replies: [] };
     });
 
     list.forEach((c) => {
-      if (c.parent_comment_id) {
-        map[c.parent_comment_id]?.replies.push(map[c.id]);
+      if (c.parent_id) {
+        map[c.parent_id]?.replies.push(map[c.id]);
       } else {
         roots.push(map[c.id]);
       }

@@ -7,7 +7,7 @@ type AgentKey = "chatgpt" | "claude" | "gemini" | "chatita";
 interface Body {
   thread_id?: string;
   parent_comment_id?: string;
-  text?: string;
+  content?: string;
 }
 
 function getServiceRoleKey(): string {
@@ -59,11 +59,11 @@ export async function POST(request: Request) {
     const body = (await request.json()) as Body;
     const threadId = body.thread_id;
     const parentCommentId = body.parent_comment_id;
-    const text = body.text?.trim() ?? "";
+    const content = body.content?.trim() ?? "";
 
-    if (!threadId || !parentCommentId || !text) {
+    if (!threadId || !parentCommentId || !content) {
       return NextResponse.json(
-        { message: "Falta thread_id, parent_comment_id o text" },
+        { message: "Falta thread_id, parent_comment_id o content" },
         { status: 400 }
       );
     }
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
 
     const wanted: AgentKey[] = ["chatgpt", "claude", "gemini", "chatita"];
 
-    const mentioned = wanted.filter((k) => isDirectMention(text, k));
+    const mentioned = wanted.filter((k) => isDirectMention(content, k));
 
     if (mentioned.length === 0) {
       return NextResponse.json({ queued: 0 }, { status: 200 });
@@ -97,7 +97,7 @@ export async function POST(request: Request) {
         thread_id: threadId,
         parent_comment_id: parentCommentId,
         agent_id: agentRow.id,
-        payload: text,
+        payload: content,
         priority: 1,
         status: "pending",
       });

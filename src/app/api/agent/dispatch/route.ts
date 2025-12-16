@@ -127,9 +127,9 @@ export async function POST() {
       .from("comments")
       .insert({
         thread_id: task.thread_id,
-        parent_comment_id: task.parent_comment_id,
-        text: reply,
-        created_by: task.agent_id,
+        parent_id: task.parent_comment_id,
+        content: reply,
+        author_id: task.agent_id,
       })
       .select("id")
       .maybeSingle();
