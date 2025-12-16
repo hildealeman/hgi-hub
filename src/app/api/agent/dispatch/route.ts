@@ -36,10 +36,8 @@ async function getServerSupabase() {
 }
 
 async function generateReplyText(task: any, agent: any | null): Promise<string> {
-  const name = typeof agent?.name === "string" ? agent.name : "Modelo";
-
-  // v1: placeholder; hook here for real APIs per provider/model
-  return `(${name}) Estoy pensando en eso… dame un momento y vuelvo con una respuesta clara.`;
+  const username = typeof agent?.username === "string" ? agent.username : "Modelo";
+  return `Esta es una respuesta automática de ${username}.`;
 }
 
 function chooseAgentVote(payload: string): MicroInteraction | null {
@@ -57,13 +55,16 @@ function chooseAgentVote(payload: string): MicroInteraction | null {
   return null;
 }
 
-export async function GET() {
+export async function POST() {
   try {
     const supabase = await getServerSupabase();
 
     const { data: tasks, error } = await supabase
       .from("agent_queue")
-      .select("id, thread_id, comment_id, agent_id, payload, priority, created_at")
+      .select(
+        "id, thread_id, parent_comment_id, agent_id, payload, priority, status, created_at"
+      )
+      .eq("status", "pending")
       .order("priority", { ascending: true })
       .order("created_at", { ascending: true })
       .limit(1);
@@ -80,7 +81,7 @@ export async function GET() {
 
     const { data: agent, error: agentError } = await supabase
       .from("agents")
-      .select("id, name, provider, model")
+      .select("id, username, provider, model, system_prompt")
       .eq("id", task.agent_id)
       .maybeSingle();
 
@@ -90,11 +91,43 @@ export async function GET() {
 
     const reply = await generateReplyText(task, agent ?? null);
 
+    // Ensure the agent has a profile with role="agent".
+    try {
+      const { data: existingProfile, error: profileReadError } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", task.agent_id)
+        .maybeSingle();
+
+      if (profileReadError) {
+        console.error("[HGI Hub] Error leyendo profile del agente", profileReadError);
+      }
+
+      if (!existingProfile?.id) {
+        const username =
+          typeof agent?.username === "string" ? agent.username : "agent";
+        const { error: profileInsertError } = await supabase.from("profiles").insert({
+          id: task.agent_id,
+          username,
+          role: "agent",
+        });
+
+        if (profileInsertError) {
+          console.error(
+            "[HGI Hub] Error creando profile del agente",
+            profileInsertError
+          );
+        }
+      }
+    } catch (e) {
+      console.error("[HGI Hub] Error asegurando profile del agente", e);
+    }
+
     const { data: insertedReply, error: insertError } = await supabase
       .from("comments")
       .insert({
         thread_id: task.thread_id,
-        parent_comment_id: task.comment_id,
+        parent_comment_id: task.parent_comment_id,
         text: reply,
         created_by: task.agent_id,
       })

@@ -10,7 +10,7 @@ type InteractionType = "like" | "dislike";
 function formatAgentDisplayName(agent: any | null): string | null {
   if (!agent) return null;
 
-  const name = typeof agent.name === "string" ? agent.name.trim() : "";
+  const name = typeof agent.username === "string" ? agent.username.trim() : "";
   const provider = typeof agent.provider === "string" ? agent.provider.trim() : "";
   const model = typeof agent.model === "string" ? agent.model.trim() : "";
 
@@ -248,7 +248,7 @@ function ThreadPageInner() {
     setLoadingComments(false);
   };
 
-  const callAgentMention = async (commentId: string, text: string) => {
+  const callAgentMention = async (parentCommentId: string, text: string) => {
     if (!threadId) return;
     try {
       await fetch("/api/agent/mention", {
@@ -256,7 +256,7 @@ function ThreadPageInner() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           thread_id: threadId,
-          comment_id: commentId,
+          parent_comment_id: parentCommentId,
           text,
         }),
       });
@@ -324,7 +324,7 @@ function ThreadPageInner() {
 
     const tick = async () => {
       try {
-        await fetch("/api/agent/dispatch", { method: "GET" });
+        await fetch("/api/agent/dispatch", { method: "POST" });
       } catch {
         // ignore
       }
@@ -502,7 +502,7 @@ function ThreadPageInner() {
         const inFilter = quotedUuidInFilter(createdByIds);
         const { data: agents, error: agentError } = await supabase
           .from("agents")
-          .select("id, name, provider, model")
+          .select("id, username, provider, model, system_prompt")
           .filter("id", "in", inFilter);
 
         if (agentError) {
@@ -721,10 +721,8 @@ function CommentCard({ comment, addReply }: any) {
         </div>
       </div>
 
-      {comment.agent && (
-        <p className="text-xs text-gray-500 mb-2">
-          Modelo: {formatAgentDisplayName(comment.agent) ?? "Modelo"}
-        </p>
+      {roleKey === "agent" && comment.agent?.username && (
+        <p className="text-xs text-gray-500 -mt-1">Modelo: {comment.agent.username}</p>
       )}
 
       <div className="prose prose-invert">

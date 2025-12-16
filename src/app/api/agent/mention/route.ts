@@ -6,7 +6,7 @@ type AgentKey = "chatgpt" | "claude" | "gemini" | "chatita";
 
 interface Body {
   thread_id?: string;
-  comment_id?: string;
+  parent_comment_id?: string;
   text?: string;
 }
 
@@ -41,36 +41,29 @@ async function getServerSupabase() {
   });
 }
 
-function detectPriority(text: string, agent: AgentKey): 1 | 2 {
+function isDirectMention(text: string, agent: AgentKey): boolean {
   const lower = text.toLowerCase();
-  if (lower.includes(`@${agent}`)) return 1;
-  // alias
-  if (agent === "chatgpt" && lower.includes("@gpt")) return 1;
-  return 2;
+  if (lower.includes(`@${agent}`)) return true;
+  if (agent === "chatgpt" && lower.includes("@gpt")) return true;
+  return false;
 }
 
 function matchAgentRow(agent: any, key: AgentKey): boolean {
-  const name = typeof agent?.name === "string" ? agent.name.toLowerCase() : "";
-  const provider = typeof agent?.provider === "string" ? agent.provider.toLowerCase() : "";
-  const model = typeof agent?.model === "string" ? agent.model.toLowerCase() : "";
-
-  if (key === "chatgpt") return name.includes("chatgpt") || model.includes("gpt") || provider.includes("openai");
-  if (key === "claude") return name.includes("claude") || model.includes("claude") || provider.includes("anthropic");
-  if (key === "gemini") return name.includes("gemini") || model.includes("gemini") || provider.includes("google");
-  if (key === "chatita") return name.includes("chatita") || name.includes("hgi");
-  return false;
+  const username =
+    typeof agent?.username === "string" ? agent.username.toLowerCase().trim() : "";
+  return username === key;
 }
 
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Body;
     const threadId = body.thread_id;
-    const commentId = body.comment_id;
+    const parentCommentId = body.parent_comment_id;
     const text = body.text?.trim() ?? "";
 
-    if (!threadId || !commentId || !text) {
+    if (!threadId || !parentCommentId || !text) {
       return NextResponse.json(
-        { message: "Falta thread_id, comment_id o text" },
+        { message: "Falta thread_id, parent_comment_id o text" },
         { status: 400 }
       );
     }
@@ -79,7 +72,7 @@ export async function POST(request: Request) {
 
     const { data: agents, error: agentsError } = await supabase
       .from("agents")
-      .select("id, name, provider, model");
+      .select("id, username, provider, model, system_prompt");
 
     if (agentsError) {
       console.error("[HGI Hub] Error leyendo agents", agentsError);
@@ -88,18 +81,25 @@ export async function POST(request: Request) {
 
     const wanted: AgentKey[] = ["chatgpt", "claude", "gemini", "chatita"];
 
+    const mentioned = wanted.filter((k) => isDirectMention(text, k));
+
+    if (mentioned.length === 0) {
+      return NextResponse.json({ queued: 0 }, { status: 200 });
+    }
+
     const tasksToInsert: Array<any> = [];
 
-    for (const key of wanted) {
+    for (const key of mentioned) {
       const agentRow = (agents ?? []).find((a: any) => matchAgentRow(a, key));
       if (!agentRow?.id) continue;
 
       tasksToInsert.push({
         thread_id: threadId,
-        comment_id: commentId,
+        parent_comment_id: parentCommentId,
         agent_id: agentRow.id,
         payload: text,
-        priority: detectPriority(text, key),
+        priority: 1,
+        status: "pending",
       });
     }
 
