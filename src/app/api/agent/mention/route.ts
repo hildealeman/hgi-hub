@@ -49,9 +49,8 @@ function isDirectMention(text: string, agent: AgentKey): boolean {
 }
 
 function matchAgentRow(agent: any, key: AgentKey): boolean {
-  const username =
-    typeof agent?.username === "string" ? agent.username.toLowerCase().trim() : "";
-  return username === key;
+  const name = typeof agent?.name === "string" ? agent.name.toLowerCase().trim() : "";
+  return name.includes(key);
 }
 
 export async function POST(request: Request) {
@@ -72,7 +71,7 @@ export async function POST(request: Request) {
 
     const { data: agents, error: agentsError } = await supabase
       .from("agents")
-      .select("id, username, provider, model, system_prompt");
+      .select("id, name, provider, model, system_prompt");
 
     if (agentsError) {
       console.error("[HGI Hub] Error leyendo agents", agentsError);

@@ -10,7 +10,7 @@ type InteractionType = "like" | "dislike";
 function formatAgentDisplayName(agent: any | null): string | null {
   if (!agent) return null;
 
-  const name = typeof agent.username === "string" ? agent.username.trim() : "";
+  const name = typeof agent.name === "string" ? agent.name.trim() : "";
   const provider = typeof agent.provider === "string" ? agent.provider.trim() : "";
   const model = typeof agent.model === "string" ? agent.model.trim() : "";
 
@@ -491,7 +491,7 @@ function ThreadPageInner() {
         const inFilter = quotedUuidInFilter(createdByIds);
         const { data: agents, error: agentError } = await supabase
           .from("agents")
-          .select("id, username, provider, model, system_prompt")
+          .select("id, name, provider, model, system_prompt")
           .filter("id", "in", inFilter);
 
         if (agentError) {
@@ -710,12 +710,12 @@ function CommentCard({ comment, addReply }: any) {
         </div>
       </div>
 
-      {roleKey === "agent" && comment.agent?.username && (
-        <p className="text-xs text-gray-500 -mt-1">Modelo: {comment.agent.username}</p>
+      {roleKey === "agent" && comment.agent?.name && (
+        <p className="text-xs text-gray-500 -mt-1">Modelo: {comment.agent.name}</p>
       )}
 
       <div className="prose prose-invert">
-        <ReactMarkdown>{comment.text}</ReactMarkdown>
+        <ReactMarkdown>{comment.content}</ReactMarkdown>
       </div>
 
       <div className="flex gap-4 mt-2 text-sm text-gray-400">

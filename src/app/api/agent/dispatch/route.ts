@@ -36,8 +36,8 @@ async function getServerSupabase() {
 }
 
 async function generateReplyText(task: any, agent: any | null): Promise<string> {
-  const username = typeof agent?.username === "string" ? agent.username : "Modelo";
-  return `Esta es una respuesta automática de ${username}.`;
+  const name = typeof agent?.name === "string" ? agent.name : "Modelo";
+  return `Esta es una respuesta automática de ${name}.`;
 }
 
 function chooseAgentVote(payload: string): MicroInteraction | null {
@@ -81,7 +81,7 @@ export async function POST() {
 
     const { data: agent, error: agentError } = await supabase
       .from("agents")
-      .select("id, username, provider, model, system_prompt")
+      .select("id, name, provider, model, system_prompt")
       .eq("id", task.agent_id)
       .maybeSingle();
 
@@ -104,8 +104,7 @@ export async function POST() {
       }
 
       if (!existingProfile?.id) {
-        const username =
-          typeof agent?.username === "string" ? agent.username : "agent";
+        const username = typeof agent?.name === "string" ? agent.name : "agent";
         const { error: profileInsertError } = await supabase.from("profiles").insert({
           id: task.agent_id,
           username,
