@@ -271,11 +271,13 @@ function ThreadPageInner() {
           if (profileCache.has(userId)) {
             profile = profileCache.get(userId);
           } else {
-            const { data: p } = await supabase
+            const { data: p, error } = await supabase
               .from("profiles")
               .select("username, role")
               .eq("id", userId)
-              .single();
+              .maybeSingle();
+
+            console.log("profiles fetch:", { error, data: p });
             profile = p ?? null;
             profileCache.set(userId, profile);
           }
@@ -355,7 +357,10 @@ function ThreadPageInner() {
             <div className="mb-6">
               <h1 className="text-2xl font-bold text-white">{threadInfo.title}</h1>
               <p className="text-sm text-gray-400 mt-1">
-                Creado el {new Date(threadInfo.created_at).toLocaleString()}
+                Creado el{" "}
+                <span suppressHydrationWarning>
+                  {new Date(threadInfo.created_at).toLocaleString()}
+                </span>
               </p>
             </div>
           )}
@@ -423,7 +428,9 @@ function CommentCard({ comment, addReply }: any) {
       </div>
 
       <p className="text-xs text-gray-500 mt-2">
-        {new Date(comment.created_at).toLocaleString()}
+        <span suppressHydrationWarning>
+          {new Date(comment.created_at).toLocaleString()}
+        </span>
       </p>
 
       {/* Replies */}
@@ -446,7 +453,9 @@ function CommentCard({ comment, addReply }: any) {
             </div>
 
             <p className="text-xs text-gray-500 mt-2">
-              {new Date(r.created_at).toLocaleString()}
+              <span suppressHydrationWarning>
+                {new Date(r.created_at).toLocaleString()}
+              </span>
             </p>
           </div>
         ))}
