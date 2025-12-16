@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
+type MicroInteraction = "like" | "dislike";
+
 function getServiceRoleKey(): string {
   return process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 }
@@ -40,6 +42,21 @@ async function generateReplyText(task: any, agent: any | null): Promise<string> 
   return `(${name}) Estoy pensando en eso… dame un momento y vuelvo con una respuesta clara.`;
 }
 
+function chooseAgentVote(payload: string): MicroInteraction | null {
+  const positives = ["gracias", "interesante", "bien", "excelente", "claro"];
+  const negatives = ["malo", "incorrecto", "estúpido", "tonto", "mal"];
+
+  const lower = (payload ?? "").toLowerCase();
+
+  if (positives.some((w) => lower.includes(w))) return "like";
+  if (negatives.some((w) => lower.includes(w))) return "dislike";
+
+  const r = Math.random();
+  if (r < 0.3) return "like";
+  if (r < 0.6) return "dislike";
+  return null;
+}
+
 export async function GET() {
   try {
     const supabase = await getServerSupabase();
@@ -73,16 +90,42 @@ export async function GET() {
 
     const reply = await generateReplyText(task, agent ?? null);
 
-    const { error: insertError } = await supabase.from("comments").insert({
-      thread_id: task.thread_id,
-      parent_comment_id: task.comment_id,
-      text: reply,
-      created_by: task.agent_id,
-    });
+    const { data: insertedReply, error: insertError } = await supabase
+      .from("comments")
+      .insert({
+        thread_id: task.thread_id,
+        parent_comment_id: task.comment_id,
+        text: reply,
+        created_by: task.agent_id,
+      })
+      .select("id")
+      .maybeSingle();
 
     if (insertError) {
       console.error("[HGI Hub] Error insertando reply", insertError);
       return NextResponse.json({ processed: false }, { status: 200 });
+    }
+
+    try {
+      const replyId = insertedReply?.id as string | undefined;
+      if (replyId) {
+        const vote = chooseAgentVote(task.payload);
+        if (vote) {
+          const { error: voteError } = await supabase
+            .from("comment_interactions")
+            .insert({
+              comment_id: replyId,
+              user_id: task.agent_id,
+              interaction: vote,
+            });
+
+          if (voteError) {
+            console.error("[HGI Hub] Error insertando auto-vote", voteError);
+          }
+        }
+      }
+    } catch (e) {
+      console.error("[HGI Hub] Error en auto-vote", e);
     }
 
     const { error: deleteError } = await supabase

@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import ReactMarkdown from "react-markdown";
 
-type InteractionType = "upvote" | "downvote";
+type InteractionType = "like" | "dislike";
 
 function formatAgentDisplayName(agent: any | null): string | null {
   if (!agent) return null;
@@ -50,17 +50,17 @@ function avatarBorderClass(role: string | null | undefined): string {
 
 function useCommentInteractions(
   commentId: string | null,
-  initial?: { upvotes?: number; downvotes?: number }
+  initial?: { likes?: number; dislikes?: number }
 ) {
-  const [upvotes, setUpvotes] = useState(0);
-  const [downvotes, setDownvotes] = useState(0);
+  const [likes, setLikes] = useState(0);
+  const [dislikes, setDislikes] = useState(0);
   const [userVote, setUserVote] = useState<InteractionType | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!commentId) return;
-    setUpvotes(initial?.upvotes ?? 0);
-    setDownvotes(initial?.downvotes ?? 0);
+    setLikes(initial?.likes ?? 0);
+    setDislikes(initial?.dislikes ?? 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commentId]);
 
@@ -74,12 +74,12 @@ function useCommentInteractions(
       );
       if (!res.ok) return;
       const json = (await res.json()) as {
-        upvotes: number;
-        downvotes: number;
+        likes: number;
+        dislikes: number;
         userVote?: InteractionType | null;
       };
-      setUpvotes(json.upvotes ?? 0);
-      setDownvotes(json.downvotes ?? 0);
+      setLikes(json.likes ?? 0);
+      setDislikes(json.dislikes ?? 0);
       setUserVote((json.userVote as InteractionType | null) ?? null);
     } catch (e) {
       console.error("[HGI Hub] Error refrescando interacciones", e);
@@ -88,13 +88,13 @@ function useCommentInteractions(
     }
   };
 
-  const interact = async (type: InteractionType) => {
+  const interact = async (interaction: InteractionType) => {
     if (!commentId) return;
     try {
       const res = await fetch("/api/comments/interact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ comment_id: commentId, type }),
+        body: JSON.stringify({ comment_id: commentId, interaction }),
       });
 
       if (!res.ok) {
@@ -103,10 +103,10 @@ function useCommentInteractions(
         return;
       }
 
-      const json = (await res.json()) as { upvotes: number; downvotes: number };
-      setUpvotes(json.upvotes ?? 0);
-      setDownvotes(json.downvotes ?? 0);
-      setUserVote(type);
+      const json = (await res.json()) as { likes: number; dislikes: number };
+      setLikes(json.likes ?? 0);
+      setDislikes(json.dislikes ?? 0);
+      setUserVote(interaction);
     } catch (e) {
       console.error("[HGI Hub] Error votando", e);
     }
@@ -117,7 +117,7 @@ function useCommentInteractions(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commentId]);
 
-  return { upvotes, downvotes, userVote, loading, refresh, interact };
+  return { likes, dislikes, userVote, loading, refresh, interact };
 }
 
 export default function ThreadPage() {
@@ -514,11 +514,14 @@ function ThreadPageInner() {
       new Set((list ?? []).map((c) => c.id).filter((id) => typeof id === "string" && id))
     ) as string[];
 
-    const interactionsByCommentId = new Map<string, { upvotes: number; downvotes: number }>();
+    const interactionsByCommentId = new Map<
+      string,
+      { likes: number; dislikes: number }
+    >();
     if (commentIds.length > 0) {
       const { data: interactions, error: interactionsError } = await supabase
         .from("comment_interactions")
-        .select("comment_id, type")
+        .select("comment_id, interaction")
         .in("comment_id", commentIds);
 
       if (interactionsError) {
@@ -530,12 +533,12 @@ function ThreadPageInner() {
 
       (interactions ?? []).forEach((row: any) => {
         const cid = row?.comment_id;
-        const type = row?.type as InteractionType | undefined;
-        if (!cid || (type !== "upvote" && type !== "downvote")) return;
+        const interaction = row?.interaction as InteractionType | undefined;
+        if (!cid || (interaction !== "like" && interaction !== "dislike")) return;
 
-        const current = interactionsByCommentId.get(cid) ?? { upvotes: 0, downvotes: 0 };
-        if (type === "upvote") current.upvotes += 1;
-        if (type === "downvote") current.downvotes += 1;
+        const current = interactionsByCommentId.get(cid) ?? { likes: 0, dislikes: 0 };
+        if (interaction === "like") current.likes += 1;
+        if (interaction === "dislike") current.dislikes += 1;
         interactionsByCommentId.set(cid, current);
       });
     }
@@ -543,8 +546,8 @@ function ThreadPageInner() {
     list.forEach((c) => {
       const profile = typeof c.created_by === "string" ? profileById.get(c.created_by) ?? null : null;
       const agent = typeof c.created_by === "string" ? agentById.get(c.created_by) ?? null : null;
-      const totals = interactionsByCommentId.get(c.id) ?? { upvotes: 0, downvotes: 0 };
-      map[c.id] = { ...c, profile, agent, upvotes: totals.upvotes, downvotes: totals.downvotes, replies: [] };
+      const totals = interactionsByCommentId.get(c.id) ?? { likes: 0, dislikes: 0 };
+      map[c.id] = { ...c, profile, agent, likes: totals.likes, dislikes: totals.dislikes, replies: [] };
     });
 
     list.forEach((c) => {
@@ -683,9 +686,9 @@ function CommentCard({ comment, addReply }: any) {
     | "admin"
     | "";
 
-  const { upvotes, downvotes, userVote, interact } = useCommentInteractions(comment.id, {
-    upvotes: comment.upvotes,
-    downvotes: comment.downvotes,
+  const { likes, dislikes, userVote, interact } = useCommentInteractions(comment.id, {
+    likes: comment.likes,
+    dislikes: comment.dislikes,
   });
 
   return (
@@ -723,17 +726,17 @@ function CommentCard({ comment, addReply }: any) {
       <div className="flex gap-4 mt-2 text-sm text-gray-400">
         <button
           type="button"
-          onClick={() => interact("upvote")}
-          className={`hover:text-white ${userVote === "upvote" ? "text-white" : ""}`}
+          onClick={() => interact("like")}
+          className={`hover:text-white ${userVote === "like" ? "text-green-400" : "text-gray-400"}`}
         >
-          👍 {upvotes}
+          👍 {likes}
         </button>
         <button
           type="button"
-          onClick={() => interact("downvote")}
-          className={`hover:text-white ${userVote === "downvote" ? "text-white" : ""}`}
+          onClick={() => interact("dislike")}
+          className={`hover:text-white ${userVote === "dislike" ? "text-red-400" : "text-gray-400"}`}
         >
-          👎 {downvotes}
+          👎 {dislikes}
         </button>
       </div>
 
@@ -818,31 +821,31 @@ function CommentCard({ comment, addReply }: any) {
 }
 
 function ReplyInteractions({ replyId }: { replyId: string }) {
-  const { upvotes, downvotes, userVote, interact } = useCommentInteractions(replyId);
+  const { likes, dislikes, userVote, interact } = useCommentInteractions(replyId);
 
   return (
     <div className="mt-3 flex items-center gap-3 text-sm text-gray-300">
       <button
         type="button"
-        onClick={() => interact("upvote")}
+        onClick={() => interact("like")}
         className={`flex items-center gap-1 rounded border border-gray-800 px-2 py-1 hover:bg-gray-900 ${
-          userVote === "upvote" ? "bg-gray-900" : ""
+          userVote === "like" ? "bg-gray-900" : ""
         }`}
-        aria-label="Upvote"
+        aria-label="Like"
       >
         <span>👍</span>
-        <span>{upvotes}</span>
+        <span className={userVote === "like" ? "text-green-400" : ""}>{likes}</span>
       </button>
       <button
         type="button"
-        onClick={() => interact("downvote")}
+        onClick={() => interact("dislike")}
         className={`flex items-center gap-1 rounded border border-gray-800 px-2 py-1 hover:bg-gray-900 ${
-          userVote === "downvote" ? "bg-gray-900" : ""
+          userVote === "dislike" ? "bg-gray-900" : ""
         }`}
-        aria-label="Downvote"
+        aria-label="Dislike"
       >
         <span>👎</span>
-        <span>{downvotes}</span>
+        <span className={userVote === "dislike" ? "text-red-400" : ""}>{dislikes}</span>
       </button>
     </div>
   );
