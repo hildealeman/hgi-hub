@@ -6,7 +6,7 @@ type AgentKey = "chatgpt" | "claude" | "gemini" | "chatita";
 
 interface Body {
   thread_id?: string;
-  parent_comment_id?: string;
+  comment_id?: string;
   text?: string;
 }
 
@@ -65,12 +65,12 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Body;
     const threadId = body.thread_id;
-    const parentCommentId = body.parent_comment_id;
+    const commentId = body.comment_id;
     const text = body.text?.trim() ?? "";
 
-    if (!threadId || !parentCommentId || !text) {
+    if (!threadId || !commentId || !text) {
       return NextResponse.json(
-        { message: "Falta thread_id, parent_comment_id o text" },
+        { message: "Falta thread_id, comment_id o text" },
         { status: 400 }
       );
     }
@@ -96,11 +96,10 @@ export async function POST(request: Request) {
 
       tasksToInsert.push({
         thread_id: threadId,
-        parent_comment_id: parentCommentId,
-        model_agent_id: agentRow.id,
-        prompt: text,
+        comment_id: commentId,
+        agent_id: agentRow.id,
+        payload: text,
         priority: detectPriority(text, key),
-        status: "pending",
       });
     }
 

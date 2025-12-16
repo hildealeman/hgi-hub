@@ -46,26 +46,25 @@ export async function GET() {
 
     const { data: tasks, error } = await supabase
       .from("agent_queue")
-      .select("id, thread_id, parent_comment_id, model_agent_id, prompt, priority, created_at")
-      .eq("status", "pending")
+      .select("id, thread_id, comment_id, agent_id, payload, priority, created_at")
       .order("priority", { ascending: true })
       .order("created_at", { ascending: true })
       .limit(1);
 
     if (error) {
       console.error("[HGI Hub] Error leyendo agent_queue", error);
-      return NextResponse.json({ dispatched: false }, { status: 200 });
+      return NextResponse.json({ processed: false }, { status: 200 });
     }
 
     const task = (tasks ?? [])[0];
     if (!task) {
-      return NextResponse.json({ dispatched: false }, { status: 200 });
+      return NextResponse.json({ processed: false }, { status: 200 });
     }
 
     const { data: agent, error: agentError } = await supabase
       .from("agents")
       .select("id, name, provider, model")
-      .eq("id", task.model_agent_id)
+      .eq("id", task.agent_id)
       .maybeSingle();
 
     if (agentError) {
@@ -76,14 +75,14 @@ export async function GET() {
 
     const { error: insertError } = await supabase.from("comments").insert({
       thread_id: task.thread_id,
-      parent_comment_id: task.parent_comment_id,
+      parent_comment_id: task.comment_id,
       text: reply,
-      created_by: task.model_agent_id,
+      created_by: task.agent_id,
     });
 
     if (insertError) {
       console.error("[HGI Hub] Error insertando reply", insertError);
-      return NextResponse.json({ dispatched: false }, { status: 200 });
+      return NextResponse.json({ processed: false }, { status: 200 });
     }
 
     const { error: deleteError } = await supabase
@@ -95,12 +94,9 @@ export async function GET() {
       console.error("[HGI Hub] Error borrando task", deleteError);
     }
 
-    return NextResponse.json(
-      { dispatched: true, task_id: task.id, agent_id: task.model_agent_id },
-      { status: 200 }
-    );
+    return NextResponse.json({ processed: true }, { status: 200 });
   } catch (error) {
     console.error("[HGI Hub] Error en /api/agent/dispatch", error);
-    return NextResponse.json({ dispatched: false }, { status: 200 });
+    return NextResponse.json({ processed: false }, { status: 200 });
   }
 }

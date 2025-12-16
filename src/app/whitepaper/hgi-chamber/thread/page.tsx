@@ -242,7 +242,7 @@ function ThreadPageInner() {
     setLoadingComments(false);
   };
 
-  const callAgentMention = async (parentCommentId: string, text: string) => {
+  const callAgentMention = async (commentId: string, text: string) => {
     if (!threadId) return;
     try {
       await fetch("/api/agent/mention", {
@@ -250,7 +250,7 @@ function ThreadPageInner() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           thread_id: threadId,
-          parent_comment_id: parentCommentId,
+          comment_id: commentId,
           text,
         }),
       });
