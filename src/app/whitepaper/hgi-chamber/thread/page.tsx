@@ -715,7 +715,11 @@ function CommentCard({ comment, addReply }: any) {
       )}
 
       <div className="prose prose-invert">
-        <ReactMarkdown>{comment.content}</ReactMarkdown>
+        {typeof comment.content === "string" && comment.content.trim() ? (
+          <ReactMarkdown>{comment.content}</ReactMarkdown>
+        ) : (
+          <p className="text-xs text-gray-500">(contenido vacío)</p>
+        )}
       </div>
 
       <div className="flex gap-4 mt-2 text-sm text-gray-400">
