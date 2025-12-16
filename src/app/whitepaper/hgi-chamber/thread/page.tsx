@@ -3,6 +3,7 @@
 import { Suspense, useState, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import ReactMarkdown from "react-markdown";
 
 export default function ThreadPage() {
   return (
@@ -24,6 +25,7 @@ function ThreadPageInner() {
   const searchParams = useSearchParams();
   const [threadTitle, setThreadTitle] = useState("");
   const [threadId, setThreadId] = useState<string | null>(null);
+  const [threadInfo, setThreadInfo] = useState<any | null>(null);
   const [threads, setThreads] = useState<any[]>([]);
   const [comments, setComments] = useState<any[]>([]);
   const [input, setInput] = useState("");
@@ -121,9 +123,25 @@ function ThreadPageInner() {
       return;
     }
 
-    setComments(structureThread(data));
+    setComments(await structureThread(data ?? []));
     setLoadingComments(false);
   };
+
+  useEffect(() => {
+    if (!threadId) return;
+
+    const loadThread = async () => {
+      const { data, error } = await supabase
+        .from("threads")
+        .select("id, title, created_by, created_at")
+        .eq("id", threadId)
+        .single();
+
+      if (!error) setThreadInfo(data);
+    };
+
+    loadThread();
+  }, [threadId]);
 
   useEffect(() => {
     if (threadIdFromUrl && threadIdFromUrl !== threadId) {
@@ -238,13 +256,34 @@ function ThreadPageInner() {
   // ────────────────────────────────────────────────
   // Convert flat comments into threaded structure
   // ────────────────────────────────────────────────
-  function structureThread(list: any[]) {
+  async function structureThread(list: any[]) {
     const map: any = {};
     const roots: any[] = [];
 
-    list.forEach((c) => {
-      map[c.id] = { ...c, replies: [] };
-    });
+    const profileCache = new Map<string, any>();
+
+    await Promise.all(
+      list.map(async (c) => {
+        let profile = null;
+        const userId = c.created_by;
+
+        if (typeof userId === "string" && userId) {
+          if (profileCache.has(userId)) {
+            profile = profileCache.get(userId);
+          } else {
+            const { data: p } = await supabase
+              .from("profiles")
+              .select("username, role")
+              .eq("id", userId)
+              .single();
+            profile = p ?? null;
+            profileCache.set(userId, profile);
+          }
+        }
+
+        map[c.id] = { ...c, profile, replies: [] };
+      })
+    );
 
     list.forEach((c) => {
       if (c.parent_comment_id) {
@@ -312,6 +351,15 @@ function ThreadPageInner() {
 
       {threadId && (
         <>
+          {threadInfo && (
+            <div className="mb-6">
+              <h1 className="text-2xl font-bold text-white">{threadInfo.title}</h1>
+              <p className="text-sm text-gray-400 mt-1">
+                Creado el {new Date(threadInfo.created_at).toLocaleString()}
+              </p>
+            </div>
+          )}
+
           {/* Comment Input */}
           <textarea
             className="w-full p-3 h-28 rounded bg-gray-900 border border-gray-700 text-white"
@@ -354,24 +402,52 @@ function ThreadPageInner() {
 function CommentCard({ comment, addReply }: any) {
   const [replyText, setReplyText] = useState("");
 
+  const username = comment.profile?.username ?? "?";
+  const role = comment.profile?.role ?? "";
+
   return (
-    <div className="border border-gray-700 p-4 rounded bg-gray-800 space-y-3">
-      <div className="flex justify-between items-center">
-        <p className="text-white">{comment.text}</p>
+    <div className="p-4 rounded-lg bg-[#111] border border-gray-800 mb-4">
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-sm font-bold">
+          {username?.[0]?.toUpperCase() ?? "?"}
+        </div>
+
+        <div className="flex flex-col">
+          <span className="text-white font-semibold">{username}</span>
+          <span className="text-xs text-gray-400">{role}</span>
+        </div>
       </div>
 
-      <div className="text-xs text-gray-400">
-        {new Date(comment.created_at).toLocaleString()}
+      <div className="prose prose-invert">
+        <ReactMarkdown>{comment.text}</ReactMarkdown>
       </div>
+
+      <p className="text-xs text-gray-500 mt-2">
+        {new Date(comment.created_at).toLocaleString()}
+      </p>
 
       {/* Replies */}
       <div className="ml-4 border-l pl-4 border-gray-600 space-y-2">
         {comment.replies.map((r: any) => (
-          <div key={r.id} className="text-gray-300 text-sm">
-            {r.text}
-            <div className="text-xs text-gray-500">
-              {new Date(r.created_at).toLocaleString()}
+          <div key={r.id} className="p-4 rounded-lg bg-[#111] border border-gray-800 mb-2">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-sm font-bold">
+                {r.profile?.username?.[0]?.toUpperCase?.() ?? "?"}
+              </div>
+
+              <div className="flex flex-col">
+                <span className="text-white font-semibold">{r.profile?.username ?? "?"}</span>
+                <span className="text-xs text-gray-400">{r.profile?.role ?? ""}</span>
+              </div>
             </div>
+
+            <div className="prose prose-invert">
+              <ReactMarkdown>{r.text}</ReactMarkdown>
+            </div>
+
+            <p className="text-xs text-gray-500 mt-2">
+              {new Date(r.created_at).toLocaleString()}
+            </p>
           </div>
         ))}
       </div>
