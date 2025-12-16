@@ -6,6 +6,7 @@ type AgentKey = "chatgpt" | "claude" | "gemini" | "chatita";
 
 interface Body {
   thread_id?: string;
+  parent_id?: string;
   parent_comment_id?: string;
   content?: string;
 }
@@ -57,12 +58,12 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Body;
     const threadId = body.thread_id;
-    const parentCommentId = body.parent_comment_id;
+    const parentId = body.parent_id ?? body.parent_comment_id;
     const content = body.content?.trim() ?? "";
 
-    if (!threadId || !parentCommentId || !content) {
+    if (!threadId || !parentId || !content) {
       return NextResponse.json(
-        { message: "Falta thread_id, parent_comment_id o content" },
+        { message: "Falta thread_id, parent_id o content" },
         { status: 400 }
       );
     }
@@ -78,26 +79,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ queued: 0 }, { status: 200 });
     }
 
-    const wanted: AgentKey[] = ["chatgpt", "claude", "gemini", "chatita"];
+    const wanted: AgentKey[] = ["chatgpt", "claude", "gemini"];
 
     const mentioned = wanted.filter((k) => isDirectMention(content, k));
-
-    if (mentioned.length === 0) {
-      return NextResponse.json({ queued: 0 }, { status: 200 });
-    }
+    const targetAgents = mentioned.length > 0 ? mentioned : wanted;
+    const priority = mentioned.length > 0 ? 1 : 2;
 
     const tasksToInsert: Array<any> = [];
 
-    for (const key of mentioned) {
+    for (const key of targetAgents) {
       const agentRow = (agents ?? []).find((a: any) => matchAgentRow(a, key));
       if (!agentRow?.id) continue;
 
       tasksToInsert.push({
+        id: crypto.randomUUID(),
         thread_id: threadId,
-        parent_comment_id: parentCommentId,
+        parent_comment_id: parentId,
         agent_id: agentRow.id,
         payload: content,
-        priority: 1,
+        priority,
         status: "pending",
       });
     }

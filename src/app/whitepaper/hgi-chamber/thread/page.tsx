@@ -256,6 +256,7 @@ function ThreadPageInner() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           thread_id: threadId,
+          parent_id: parentCommentId,
           parent_comment_id: parentCommentId,
           content,
         }),
