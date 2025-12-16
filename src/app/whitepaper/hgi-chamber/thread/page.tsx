@@ -5,6 +5,70 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import ReactMarkdown from "react-markdown";
 
+type InteractionType = "upvote" | "downvote";
+
+function useCommentInteractions(commentId: string | null) {
+  const [upvotes, setUpvotes] = useState(0);
+  const [downvotes, setDownvotes] = useState(0);
+  const [userVote, setUserVote] = useState<InteractionType | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const refresh = async () => {
+    if (!commentId) return;
+    try {
+      setLoading(true);
+      const res = await fetch(
+        `/api/comments/interact?comment_id=${encodeURIComponent(commentId)}`,
+        { method: "GET" }
+      );
+      if (!res.ok) return;
+      const json = (await res.json()) as {
+        upvotes: number;
+        downvotes: number;
+        userVote?: InteractionType | null;
+      };
+      setUpvotes(json.upvotes ?? 0);
+      setDownvotes(json.downvotes ?? 0);
+      setUserVote((json.userVote as InteractionType | null) ?? null);
+    } catch (e) {
+      console.error("[HGI Hub] Error refrescando interacciones", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const interact = async (type: InteractionType) => {
+    if (!commentId) return;
+    try {
+      const res = await fetch("/api/comments/interact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ comment_id: commentId, type }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        console.error("[HGI Hub] Error votando", res.status, text);
+        return;
+      }
+
+      const json = (await res.json()) as { upvotes: number; downvotes: number };
+      setUpvotes(json.upvotes ?? 0);
+      setDownvotes(json.downvotes ?? 0);
+      setUserVote(type);
+    } catch (e) {
+      console.error("[HGI Hub] Error votando", e);
+    }
+  };
+
+  useEffect(() => {
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commentId]);
+
+  return { upvotes, downvotes, userVote, loading, refresh, interact };
+}
+
 export default function ThreadPage() {
   return (
     <Suspense
@@ -141,6 +205,58 @@ function ThreadPageInner() {
     };
 
     loadThread();
+  }, [threadId]);
+
+  useEffect(() => {
+    if (!threadId) return;
+
+    const es = new EventSource(
+      `/api/agent/stream?thread_id=${encodeURIComponent(threadId)}`
+    );
+
+    const onNewTask = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log("[HGI Agent SSE] new_task", data);
+      } catch {
+        console.log("[HGI Agent SSE] new_task", event.data);
+      }
+    };
+
+    es.addEventListener("new_task", onNewTask);
+
+    es.addEventListener("status", (event: MessageEvent) => {
+      console.log("[HGI Agent SSE] status", event.data);
+    });
+
+    es.addEventListener("ready", () => {
+      console.log("[HGI Agent SSE] ready");
+    });
+
+    es.onerror = (err) => {
+      console.error("[HGI Agent SSE] error", err);
+    };
+
+    return () => {
+      es.removeEventListener("new_task", onNewTask);
+      es.close();
+    };
+  }, [threadId]);
+
+  useEffect(() => {
+    if (!threadId) return;
+
+    const tick = async () => {
+      try {
+        await fetch("/api/agent/process", { method: "GET" });
+      } catch {
+        // ignore
+      }
+    };
+
+    tick();
+    const id = setInterval(tick, 10000);
+    return () => clearInterval(id);
   }, [threadId]);
 
   useEffect(() => {
@@ -410,6 +526,10 @@ function CommentCard({ comment, addReply }: any) {
   const username = comment.profile?.username ?? "?";
   const role = comment.profile?.role ?? "";
 
+  const { upvotes, downvotes, userVote, interact } = useCommentInteractions(
+    comment.id
+  );
+
   return (
     <div className="p-4 rounded-lg bg-[#111] border border-gray-800 mb-4">
       <div className="flex items-center gap-2 mb-2">
@@ -425,6 +545,31 @@ function CommentCard({ comment, addReply }: any) {
 
       <div className="prose prose-invert">
         <ReactMarkdown>{comment.text}</ReactMarkdown>
+      </div>
+
+      <div className="mt-3 flex items-center gap-3 text-sm text-gray-300">
+        <button
+          type="button"
+          onClick={() => interact("upvote")}
+          className={`flex items-center gap-1 rounded border border-gray-800 px-2 py-1 hover:bg-gray-900 ${
+            userVote === "upvote" ? "bg-gray-900" : ""
+          }`}
+          aria-label="Upvote"
+        >
+          <span>👍</span>
+          <span>{upvotes}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => interact("downvote")}
+          className={`flex items-center gap-1 rounded border border-gray-800 px-2 py-1 hover:bg-gray-900 ${
+            userVote === "downvote" ? "bg-gray-900" : ""
+          }`}
+          aria-label="Downvote"
+        >
+          <span>👎</span>
+          <span>{downvotes}</span>
+        </button>
       </div>
 
       <p className="text-xs text-gray-500 mt-2">
@@ -451,6 +596,8 @@ function CommentCard({ comment, addReply }: any) {
             <div className="prose prose-invert">
               <ReactMarkdown>{r.text}</ReactMarkdown>
             </div>
+
+            <ReplyInteractions replyId={r.id} />
 
             <p className="text-xs text-gray-500 mt-2">
               <span suppressHydrationWarning>
@@ -480,6 +627,37 @@ function CommentCard({ comment, addReply }: any) {
           Enviar
         </button>
       </div>
+    </div>
+  );
+}
+
+function ReplyInteractions({ replyId }: { replyId: string }) {
+  const { upvotes, downvotes, userVote, interact } = useCommentInteractions(replyId);
+
+  return (
+    <div className="mt-3 flex items-center gap-3 text-sm text-gray-300">
+      <button
+        type="button"
+        onClick={() => interact("upvote")}
+        className={`flex items-center gap-1 rounded border border-gray-800 px-2 py-1 hover:bg-gray-900 ${
+          userVote === "upvote" ? "bg-gray-900" : ""
+        }`}
+        aria-label="Upvote"
+      >
+        <span>👍</span>
+        <span>{upvotes}</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => interact("downvote")}
+        className={`flex items-center gap-1 rounded border border-gray-800 px-2 py-1 hover:bg-gray-900 ${
+          userVote === "downvote" ? "bg-gray-900" : ""
+        }`}
+        aria-label="Downvote"
+      >
+        <span>👎</span>
+        <span>{downvotes}</span>
+      </button>
     </div>
   );
 }
