@@ -676,7 +676,7 @@ function CommentCard({ comment, addReply }: any) {
   const displayName =
     comment.profile?.username ??
     formatAgentDisplayName(comment.agent) ??
-    (typeof comment.created_by === "string" ? comment.created_by.slice(0, 8) : "?");
+    (typeof comment.author_id === "string" ? comment.author_id.slice(0, 8) : "?");
 
   const displayRole =
     comment.profile?.role ??
@@ -753,7 +753,7 @@ function CommentCard({ comment, addReply }: any) {
 
       {/* Replies */}
       <div className="ml-4 border-l pl-4 border-gray-600 space-y-2">
-        {comment.replies.map((r: any) => (
+        {(comment.replies ?? []).map((r: any) => (
           <div key={r.id} className="p-4 rounded-lg bg-[#111] border border-gray-800 mb-2">
             <div className="flex items-center gap-2 mb-2">
               <div
@@ -768,7 +768,7 @@ function CommentCard({ comment, addReply }: any) {
                 <span className="text-white font-semibold">
                   {r.profile?.username ??
                     formatAgentDisplayName(r.agent) ??
-                    (typeof r.created_by === "string" ? r.created_by.slice(0, 8) : "?")}
+                    (typeof r.author_id === "string" ? r.author_id.slice(0, 8) : "?")}
                 </span>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-400">
@@ -788,7 +788,11 @@ function CommentCard({ comment, addReply }: any) {
             )}
 
             <div className="prose prose-invert">
-              <ReactMarkdown>{r.text}</ReactMarkdown>
+              {typeof r.content === "string" && r.content.trim() ? (
+                <ReactMarkdown>{r.content}</ReactMarkdown>
+              ) : (
+                <p className="text-xs text-gray-500">(contenido vacío)</p>
+              )}
             </div>
 
             <ReplyInteractions replyId={r.id} />
