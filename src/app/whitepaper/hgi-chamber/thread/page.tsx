@@ -7,11 +7,62 @@ import ReactMarkdown from "react-markdown";
 
 type InteractionType = "upvote" | "downvote";
 
-function useCommentInteractions(commentId: string | null) {
+function formatAgentDisplayName(agent: any | null): string | null {
+  if (!agent) return null;
+
+  const name = typeof agent.name === "string" ? agent.name.trim() : "";
+  const provider = typeof agent.provider === "string" ? agent.provider.trim() : "";
+  const model = typeof agent.model === "string" ? agent.model.trim() : "";
+
+  const key = `${provider}:${model}:${name}`.toLowerCase();
+
+  if (key.includes("chatita") || name.toLowerCase().includes("chatita")) return "La Chatita (HGI Model)";
+  if (key.includes("openai") || model.toLowerCase().includes("gpt")) return "GPT-4.1 (OpenAI)";
+  if (key.includes("anthropic") || model.toLowerCase().includes("claude")) return "Claude 3.7 (Anthropic)";
+  if (key.includes("google") || model.toLowerCase().includes("gemini")) return "Gemini 2.0 Flash (Google)";
+  if (key.includes("groq")) return "GroqMix (Groq)";
+  if (key.includes("ollama")) return "Ollama-Local (Ollama)";
+
+  if (name) return name;
+  if (model) return model;
+  return "Modelo";
+}
+
+function formatAgentSubtitle(agent: any | null): string | null {
+  if (!agent) return null;
+  const provider = typeof agent.provider === "string" ? agent.provider.trim() : "";
+  const model = typeof agent.model === "string" ? agent.model.trim() : "";
+  const parts = [provider, model].filter(Boolean);
+  return parts.length ? parts.join(" • ") : null;
+}
+
+function avatarInitial(name: string | null | undefined): string {
+  const normalized = (name ?? "").trim();
+  return normalized ? normalized[0]!.toUpperCase() : "?";
+}
+
+function avatarBorderClass(role: string | null | undefined): string {
+  if (role === "admin") return "border-red-500";
+  if (role === "agent") return "border-blue-500";
+  if (role === "human") return "border-green-500";
+  return "border-gray-700";
+}
+
+function useCommentInteractions(
+  commentId: string | null,
+  initial?: { upvotes?: number; downvotes?: number }
+) {
   const [upvotes, setUpvotes] = useState(0);
   const [downvotes, setDownvotes] = useState(0);
   const [userVote, setUserVote] = useState<InteractionType | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!commentId) return;
+    setUpvotes(initial?.upvotes ?? 0);
+    setDownvotes(initial?.downvotes ?? 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commentId]);
 
   const refresh = async () => {
     if (!commentId) return;
@@ -191,6 +242,23 @@ function ThreadPageInner() {
     setLoadingComments(false);
   };
 
+  const callAgentMention = async (parentCommentId: string, text: string) => {
+    if (!threadId) return;
+    try {
+      await fetch("/api/agent/mention", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          thread_id: threadId,
+          parent_comment_id: parentCommentId,
+          text,
+        }),
+      });
+    } catch {
+      // ignore
+    }
+  };
+
   useEffect(() => {
     if (!threadId) return;
 
@@ -218,8 +286,10 @@ function ThreadPageInner() {
       try {
         const data = JSON.parse(event.data);
         console.log("[HGI Agent SSE] new_task", data);
+        fetchComments();
       } catch {
         console.log("[HGI Agent SSE] new_task", event.data);
+        fetchComments();
       }
     };
 
@@ -248,14 +318,14 @@ function ThreadPageInner() {
 
     const tick = async () => {
       try {
-        await fetch("/api/agent/process", { method: "GET" });
+        await fetch("/api/agent/dispatch", { method: "GET" });
       } catch {
         // ignore
       }
     };
 
     tick();
-    const id = setInterval(tick, 10000);
+    const id = setInterval(tick, 7000);
     return () => clearInterval(id);
   }, [threadId]);
 
@@ -333,6 +403,7 @@ function ThreadPageInner() {
     }
 
     setInput("");
+    await callAgentMention(data.id, data.text);
     fetchComments();
   };
 
@@ -366,6 +437,25 @@ function ThreadPageInner() {
       return;
     }
 
+    try {
+      const { data: created } = await supabase
+        .from("comments")
+        .select("id, text")
+        .eq("thread_id", threadId)
+        .eq("parent_comment_id", parentId)
+        .eq("created_by", user.id)
+        .eq("text", replyText)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (created?.id && typeof created.text === "string") {
+        await callAgentMention(created.id, created.text);
+      }
+    } catch {
+      // ignore
+    }
+
     fetchComments();
   };
 
@@ -376,32 +466,86 @@ function ThreadPageInner() {
     const map: any = {};
     const roots: any[] = [];
 
-    const profileCache = new Map<string, any>();
+    const createdByIds = Array.from(
+      new Set(
+        (list ?? [])
+          .map((c) => c.created_by)
+          .filter((id) => typeof id === "string" && id)
+      )
+    ) as string[];
 
-    await Promise.all(
-      list.map(async (c) => {
-        let profile = null;
-        const userId = c.created_by;
+    const profileById = new Map<string, any>();
+    if (createdByIds.length > 0) {
+      const { data: profiles, error: profileError } = await supabase
+        .from("profiles")
+        .select("id, username, role")
+        .in("id", createdByIds);
 
-        if (typeof userId === "string" && userId) {
-          if (profileCache.has(userId)) {
-            profile = profileCache.get(userId);
-          } else {
-            const { data: p, error } = await supabase
-              .from("profiles")
-              .select("username, role")
-              .eq("id", userId)
-              .maybeSingle();
+      if (profileError) {
+        console.error("[HGI Hub] Error cargando profiles batch", profileError);
+      }
 
-            console.log("profiles fetch:", { error, data: p });
-            profile = p ?? null;
-            profileCache.set(userId, profile);
-          }
+      (profiles ?? []).forEach((p: any) => {
+        if (p?.id) profileById.set(p.id, p);
+      });
+    }
+
+    const agentById = new Map<string, any>();
+    if (createdByIds.length > 0) {
+      try {
+        const { data: agents, error: agentError } = await supabase
+          .from("agents")
+          .select("id, name, provider, model")
+          .in("id", createdByIds);
+
+        if (agentError) {
+          console.error("[HGI Hub] Error cargando agents batch", agentError);
         }
 
-        map[c.id] = { ...c, profile, replies: [] };
-      })
-    );
+        (agents ?? []).forEach((a: any) => {
+          if (a?.id) agentById.set(a.id, a);
+        });
+      } catch (e) {
+        console.error("[HGI Hub] Error cargando agents batch", e);
+      }
+    }
+
+    const commentIds = Array.from(
+      new Set((list ?? []).map((c) => c.id).filter((id) => typeof id === "string" && id))
+    ) as string[];
+
+    const interactionsByCommentId = new Map<string, { upvotes: number; downvotes: number }>();
+    if (commentIds.length > 0) {
+      const { data: interactions, error: interactionsError } = await supabase
+        .from("comment_interactions")
+        .select("comment_id, type")
+        .in("comment_id", commentIds);
+
+      if (interactionsError) {
+        console.error(
+          "[HGI Hub] Error cargando comment_interactions batch",
+          interactionsError
+        );
+      }
+
+      (interactions ?? []).forEach((row: any) => {
+        const cid = row?.comment_id;
+        const type = row?.type as InteractionType | undefined;
+        if (!cid || (type !== "upvote" && type !== "downvote")) return;
+
+        const current = interactionsByCommentId.get(cid) ?? { upvotes: 0, downvotes: 0 };
+        if (type === "upvote") current.upvotes += 1;
+        if (type === "downvote") current.downvotes += 1;
+        interactionsByCommentId.set(cid, current);
+      });
+    }
+
+    list.forEach((c) => {
+      const profile = typeof c.created_by === "string" ? profileById.get(c.created_by) ?? null : null;
+      const agent = typeof c.created_by === "string" ? agentById.get(c.created_by) ?? null : null;
+      const totals = interactionsByCommentId.get(c.id) ?? { upvotes: 0, downvotes: 0 };
+      map[c.id] = { ...c, profile, agent, upvotes: totals.upvotes, downvotes: totals.downvotes, replies: [] };
+    });
 
     list.forEach((c) => {
       if (c.parent_comment_id) {
@@ -523,52 +667,73 @@ function ThreadPageInner() {
 function CommentCard({ comment, addReply }: any) {
   const [replyText, setReplyText] = useState("");
 
-  const username = comment.profile?.username ?? "?";
-  const role = comment.profile?.role ?? "";
+  const displayName =
+    comment.profile?.username ??
+    formatAgentDisplayName(comment.agent) ??
+    (typeof comment.created_by === "string" ? comment.created_by.slice(0, 8) : "?");
 
-  const { upvotes, downvotes, userVote, interact } = useCommentInteractions(
-    comment.id
-  );
+  const displayRole =
+    comment.profile?.role ??
+    formatAgentSubtitle(comment.agent) ??
+    "";
+
+  const roleKey = (comment.profile?.role ?? (comment.agent ? "agent" : "")) as
+    | "human"
+    | "agent"
+    | "admin"
+    | "";
+
+  const { upvotes, downvotes, userVote, interact } = useCommentInteractions(comment.id, {
+    upvotes: comment.upvotes,
+    downvotes: comment.downvotes,
+  });
 
   return (
     <div className="p-4 rounded-lg bg-[#111] border border-gray-800 mb-4">
       <div className="flex items-center gap-2 mb-2">
-        <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-sm font-bold">
-          {username?.[0]?.toUpperCase() ?? "?"}
+        <div
+          className={`w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-sm font-bold border-2 ${avatarBorderClass(
+            roleKey
+          )}`}
+        >
+          {displayName?.[0]?.toUpperCase() ?? "?"}
         </div>
 
         <div className="flex flex-col">
-          <span className="text-white font-semibold">{username}</span>
-          <span className="text-xs text-gray-400">{role}</span>
+          <span className="text-white font-semibold">{displayName}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400">{displayRole}</span>
+            <span className={`text-[10px] px-2 py-0.5 rounded border border-gray-700 text-gray-300`}>
+              {roleKey || "?"}
+            </span>
+          </div>
         </div>
       </div>
+
+      {comment.agent && (
+        <p className="text-xs text-gray-500 mb-2">
+          Modelo: {formatAgentDisplayName(comment.agent) ?? "Modelo"}
+        </p>
+      )}
 
       <div className="prose prose-invert">
         <ReactMarkdown>{comment.text}</ReactMarkdown>
       </div>
 
-      <div className="mt-3 flex items-center gap-3 text-sm text-gray-300">
+      <div className="flex gap-4 mt-2 text-sm text-gray-400">
         <button
           type="button"
           onClick={() => interact("upvote")}
-          className={`flex items-center gap-1 rounded border border-gray-800 px-2 py-1 hover:bg-gray-900 ${
-            userVote === "upvote" ? "bg-gray-900" : ""
-          }`}
-          aria-label="Upvote"
+          className={`hover:text-white ${userVote === "upvote" ? "text-white" : ""}`}
         >
-          <span>👍</span>
-          <span>{upvotes}</span>
+          👍 {upvotes}
         </button>
         <button
           type="button"
           onClick={() => interact("downvote")}
-          className={`flex items-center gap-1 rounded border border-gray-800 px-2 py-1 hover:bg-gray-900 ${
-            userVote === "downvote" ? "bg-gray-900" : ""
-          }`}
-          aria-label="Downvote"
+          className={`hover:text-white ${userVote === "downvote" ? "text-white" : ""}`}
         >
-          <span>👎</span>
-          <span>{downvotes}</span>
+          👎 {downvotes}
         </button>
       </div>
 
@@ -583,15 +748,36 @@ function CommentCard({ comment, addReply }: any) {
         {comment.replies.map((r: any) => (
           <div key={r.id} className="p-4 rounded-lg bg-[#111] border border-gray-800 mb-2">
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-sm font-bold">
-                {r.profile?.username?.[0]?.toUpperCase?.() ?? "?"}
+              <div
+                className={`w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-sm font-bold border-2 ${avatarBorderClass(
+                  (r.profile?.role ?? (r.agent ? "agent" : "")) as any
+                )}`}
+              >
+                {avatarInitial(r.profile?.username ?? formatAgentDisplayName(r.agent))}
               </div>
 
               <div className="flex flex-col">
-                <span className="text-white font-semibold">{r.profile?.username ?? "?"}</span>
-                <span className="text-xs text-gray-400">{r.profile?.role ?? ""}</span>
+                <span className="text-white font-semibold">
+                  {r.profile?.username ??
+                    formatAgentDisplayName(r.agent) ??
+                    (typeof r.created_by === "string" ? r.created_by.slice(0, 8) : "?")}
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400">
+                    {r.profile?.role ?? formatAgentSubtitle(r.agent) ?? ""}
+                  </span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded border border-gray-700 text-gray-300`}>
+                    {(r.profile?.role ?? (r.agent ? "agent" : "")) || "?"}
+                  </span>
+                </div>
               </div>
             </div>
+
+            {r.agent && (
+              <p className="text-xs text-gray-500 mb-2">
+                Modelo: {formatAgentDisplayName(r.agent) ?? "Modelo"}
+              </p>
+            )}
 
             <div className="prose prose-invert">
               <ReactMarkdown>{r.text}</ReactMarkdown>
