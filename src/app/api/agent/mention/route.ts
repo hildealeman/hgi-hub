@@ -2,14 +2,59 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
-type AgentKey = "chatgpt" | "claude" | "gemini" | "chatita";
-
 interface Body {
   thread_id?: string;
   parent_id?: string;
   parent_comment_id?: string;
   content?: string;
 }
+
+function extractMentionTokens(text: string): string[] {
+  const src = text ?? "";
+  const tokens = new Set<string>();
+  const re = /@([a-z0-9_\-]+)/gi;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(src))) {
+    const raw = match[1]?.trim();
+    if (raw) tokens.add(raw);
+  }
+  return Array.from(tokens);
+}
+
+const MENTION_ALIASES: Record<string, (a: any) => boolean> = {
+  chatgpt: (a) => {
+    const key = `${a?.name ?? ""}:${a?.provider ?? ""}:${a?.model ?? ""}`.toLowerCase();
+    return key.includes("gpt") || key.includes("openai");
+  },
+  gpt: (a) => {
+    const key = `${a?.name ?? ""}:${a?.provider ?? ""}:${a?.model ?? ""}`.toLowerCase();
+    return key.includes("gpt") || key.includes("openai");
+  },
+  claude: (a) => {
+    const key = `${a?.name ?? ""}:${a?.provider ?? ""}:${a?.model ?? ""}`.toLowerCase();
+    return key.includes("claude") || key.includes("anthropic");
+  },
+  anthropic: (a) => {
+    const key = `${a?.name ?? ""}:${a?.provider ?? ""}:${a?.model ?? ""}`.toLowerCase();
+    return key.includes("claude") || key.includes("anthropic");
+  },
+  gemini: (a) => {
+    const key = `${a?.name ?? ""}:${a?.provider ?? ""}:${a?.model ?? ""}`.toLowerCase();
+    return key.includes("gemini") || key.includes("google");
+  },
+  google: (a) => {
+    const key = `${a?.name ?? ""}:${a?.provider ?? ""}:${a?.model ?? ""}`.toLowerCase();
+    return key.includes("gemini") || key.includes("google");
+  },
+  chatita: (a) => {
+    const key = `${a?.name ?? ""}`.toLowerCase();
+    return key.includes("chatita");
+  },
+  ollama: (a) => {
+    const key = `${a?.provider ?? ""}`.toLowerCase();
+    return key.includes("ollama");
+  },
+};
 
 function getServiceRoleKey(): string {
   return process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -42,16 +87,13 @@ async function getServerSupabase() {
   });
 }
 
-function isDirectMention(text: string, agent: AgentKey): boolean {
-  const lower = text.toLowerCase();
-  if (lower.includes(`@${agent}`)) return true;
-  if (agent === "chatgpt" && lower.includes("@gpt")) return true;
-  return false;
-}
-
-function matchAgentRow(agent: any, key: AgentKey): boolean {
-  const name = typeof agent?.name === "string" ? agent.name.toLowerCase().trim() : "";
-  return name.includes(key);
+function findAgentByAlias(token: string, agents: any[]): any | null {
+  const tokenLower = token.toLowerCase();
+  const matcher = MENTION_ALIASES[tokenLower];
+  if (matcher) {
+    return agents.find(matcher) ?? null;
+  }
+  return null;
 }
 
 export async function POST(request: Request) {
@@ -62,10 +104,7 @@ export async function POST(request: Request) {
     const content = body.content?.trim() ?? "";
 
     if (!threadId || !parentId || !content) {
-      return NextResponse.json(
-        { message: "Falta thread_id, parent_id o content" },
-        { status: 400 }
-      );
+      return NextResponse.json({ queued: 0 }, { status: 200 });
     }
 
     const supabase = await getServerSupabase();
@@ -79,43 +118,100 @@ export async function POST(request: Request) {
       return NextResponse.json({ queued: 0 }, { status: 200 });
     }
 
-    const wanted: AgentKey[] = ["chatgpt", "claude", "gemini"];
-
-    const mentioned = wanted.filter((k) => isDirectMention(content, k));
-    const targetAgents = mentioned.length > 0 ? mentioned : wanted;
-    const priority = mentioned.length > 0 ? 1 : 2;
-
-    const tasksToInsert: Array<any> = [];
-
-    for (const key of targetAgents) {
-      const agentRow = (agents ?? []).find((a: any) => matchAgentRow(a, key));
-      if (!agentRow?.id) continue;
-
-      tasksToInsert.push({
-        id: crypto.randomUUID(),
-        thread_id: threadId,
-        parent_comment_id: parentId,
-        agent_id: agentRow.id,
-        payload: content,
-        priority,
-        status: "pending",
-      });
-    }
-
-    if (tasksToInsert.length === 0) {
+    const tokens = extractMentionTokens(content);
+    if (tokens.length === 0) {
       return NextResponse.json({ queued: 0 }, { status: 200 });
     }
 
-    const { error: insertError } = await supabase
-      .from("agent_queue")
-      .insert(tasksToInsert);
+    const ignored = new Set(["memoria", "critico", "reflexion", "admin", "mod", "sistema"]);
 
-    if (insertError) {
-      console.error("[HGI Hub] Error insertando agent_queue", insertError);
-      return NextResponse.json({ queued: 0 }, { status: 200 });
+    const agentByName = new Map<string, any>();
+    (agents ?? []).forEach((a: any) => {
+      const name = typeof a?.name === "string" ? a.name.toLowerCase().trim() : "";
+      if (name) agentByName.set(name, a);
+    });
+
+    const queueRows: Array<any> = [];
+    const humanTokens: string[] = [];
+
+    const enqueuedAgentIds = new Set<string>();
+
+    for (const token of tokens) {
+      const tokenLower = token.toLowerCase();
+      if (ignored.has(tokenLower)) continue;
+
+      let agentRow = agentByName.get(tokenLower) ?? null;
+
+      if (!agentRow) {
+        agentRow = findAgentByAlias(tokenLower, agents ?? []);
+      }
+
+      if (agentRow?.id && !enqueuedAgentIds.has(agentRow.id)) {
+        enqueuedAgentIds.add(agentRow.id);
+        queueRows.push({
+          id: crypto.randomUUID(),
+          agent_id: agentRow.id,
+          thread_id: threadId,
+          parent_comment_id: parentId,
+          payload: content,
+          priority: 1,
+          created_at: new Date().toISOString(),
+        });
+      } else if (!agentRow) {
+        humanTokens.push(token);
+      }
     }
 
-    return NextResponse.json({ queued: tasksToInsert.length }, { status: 200 });
+    let queued = 0;
+
+    if (queueRows.length > 0) {
+      const { error: insertError } = await supabase.from("agent_queue").insert(queueRows);
+      if (insertError) {
+        console.error("[HGI Hub] Error insertando agent_queue", insertError);
+      } else {
+        queued = queueRows.length;
+      }
+    }
+
+    if (humanTokens.length > 0) {
+      const { data: profiles, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, username")
+        .in("username", humanTokens);
+
+      if (profilesError) {
+        console.error("[HGI Hub] Error leyendo profiles", profilesError);
+      } else {
+        for (const p of profiles ?? []) {
+          if (!p?.id) continue;
+          try {
+            const base = {
+              id: crypto.randomUUID(),
+              comment_id: parentId,
+              user_id: p.id,
+              created_at: new Date().toISOString(),
+            };
+
+            const { error: mentionInsertError } = await supabase
+              .from("comment_interactions")
+              .insert({ ...base, type: "mention" });
+
+            if (mentionInsertError) {
+              const { error: fallbackError } = await supabase
+                .from("comment_interactions")
+                .insert({ ...base, interaction: "mention" });
+              if (fallbackError) {
+                console.error("[HGI Hub] Error insertando mention", fallbackError);
+              }
+            }
+          } catch (e) {
+            console.error("[HGI Hub] Error insertando mention", e);
+          }
+        }
+      }
+    }
+
+    return NextResponse.json({ queued }, { status: 200 });
   } catch (error) {
     console.error("[HGI Hub] Error en /api/agent/mention", error);
     return NextResponse.json({ queued: 0 }, { status: 200 });

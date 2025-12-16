@@ -2,8 +2,6 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
-type MicroInteraction = "like" | "dislike";
-
 function getServiceRoleKey(): string {
   return process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 }
@@ -38,46 +36,7 @@ async function getServerSupabase() {
 async function generateReplyText(task: any, agent: any | null): Promise<string> {
   const name = typeof agent?.name === "string" && agent.name.trim() ? agent.name.trim() : "Modelo";
   const payload = typeof task?.payload === "string" ? task.payload : "";
-  return `(${name} reply) ${payload}`;
-}
-
-function chooseAgentVote(payload: string): MicroInteraction | null {
-  const positives = [
-    "gracias",
-    "interesante",
-    "bien",
-    "excelente",
-    "claro",
-    "genial",
-    "buen",
-    "buenísimo",
-    "love",
-    "great",
-    "nice",
-    "awesome",
-  ];
-  const negatives = [
-    "malo",
-    "incorrecto",
-    "estúpido",
-    "tonto",
-    "mal",
-    "horrible",
-    "terrible",
-    "error",
-    "wrong",
-    "bad",
-  ];
-
-  const lower = (payload ?? "").toLowerCase();
-
-  if (positives.some((w) => lower.includes(w))) return "like";
-  if (negatives.some((w) => lower.includes(w))) return "dislike";
-
-  const r = Math.random();
-  if (r < 0.3) return "like";
-  if (r < 0.6) return "dislike";
-  return null;
+  return `(${name}) ${payload}`;
 }
 
 export async function POST() {
@@ -87,7 +46,7 @@ export async function POST() {
     const { data: tasks, error } = await supabase
       .from("agent_queue")
       .select(
-        "id, thread_id, parent_comment_id, agent_id, payload, priority, status, created_at"
+        "id, thread_id, parent_id, parent_comment_id, agent_id, payload, priority, status, created_at"
       )
       .eq("status", "pending")
       .order("priority", { ascending: true })
@@ -101,6 +60,15 @@ export async function POST() {
 
     const task = (tasks ?? [])[0];
     if (!task) {
+      return NextResponse.json({ processed: false }, { status: 200 });
+    }
+
+    const parentId = (task.parent_id ?? task.parent_comment_id ?? null) as string | null;
+    if (!parentId) {
+      const { error: deleteError } = await supabase.from("agent_queue").delete().eq("id", task.id);
+      if (deleteError) {
+        console.error("[HGI Hub] Error borrando task inválido", deleteError);
+      }
       return NextResponse.json({ processed: false }, { status: 200 });
     }
 
@@ -152,9 +120,9 @@ export async function POST() {
     const { error: insertError } = await supabase.from("comments").insert({
       id: replyId,
       thread_id: task.thread_id,
-      parent_id: task.parent_comment_id,
-      content: reply,
+      parent_id: parentId,
       author_id: task.agent_id,
+      content: reply,
     });
 
     if (insertError) {
@@ -163,14 +131,22 @@ export async function POST() {
     }
 
     try {
-      const vote = chooseAgentVote(task.payload);
-      if (vote) {
-        const { error: voteError } = await supabase
-          .from("comment_interactions")
-          .insert({ comment_id: replyId, user_id: task.agent_id, interaction: vote });
+      const { error: voteError } = await supabase.from("comment_interactions").insert({
+        id: crypto.randomUUID(),
+        comment_id: replyId,
+        user_id: task.agent_id,
+        type: "auto",
+      });
 
-        if (voteError) {
-          console.error("[HGI Hub] Error insertando auto-vote", voteError);
+      if (voteError) {
+        const { error: fallbackError } = await supabase.from("comment_interactions").insert({
+          id: crypto.randomUUID(),
+          comment_id: replyId,
+          user_id: task.agent_id,
+          interaction: "like",
+        });
+        if (fallbackError) {
+          console.error("[HGI Hub] Error insertando auto-vote", fallbackError);
         }
       }
     } catch (e) {

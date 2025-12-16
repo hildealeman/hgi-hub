@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect, useMemo } from "react";
+import { Suspense, useState, useEffect, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import ReactMarkdown from "react-markdown";
@@ -144,16 +144,78 @@ export default function ThreadPage() {
 function ThreadPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [threadTitle, setThreadTitle] = useState("");
   const [threadId, setThreadId] = useState<string | null>(null);
   const [threadInfo, setThreadInfo] = useState<any | null>(null);
   const [threads, setThreads] = useState<any[]>([]);
   const [comments, setComments] = useState<any[]>([]);
   const [input, setInput] = useState("");
+  const [mentionPrefix, setMentionPrefix] = useState<string | null>(null);
+  const [mentionRange, setMentionRange] = useState<{ start: number; end: number } | null>(
+    null
+  );
+  const [suggestions, setSuggestions] = useState<{
+    agents: Array<{ id: string; name: string }>;
+    humans: Array<{ id: string; username: string }>;
+    system: Array<{ key: string; label: string }>;
+  } | null>(null);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [suggestLoading, setSuggestLoading] = useState(false);
   const [loadingThread, setLoadingThread] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
   const [loadingThreads, setLoadingThreads] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const getMentionTokenAtCursor = (value: string, cursor: number) => {
+    const left = value.slice(0, cursor);
+    const tokenMatch = left.match(/(^|\s)(@[A-Za-z0-9_\-]*)$/);
+    if (!tokenMatch) return null;
+    const token = tokenMatch[2] ?? "";
+    if (!/^@[A-Za-z0-9_\-]*$/.test(token)) return null;
+    const start = left.length - token.length;
+    return { token, start, end: cursor };
+  };
+
+  const fetchMentionSuggestions = async (prefix: string) => {
+    try {
+      setSuggestLoading(true);
+      const res = await fetch(
+        `/api/mentions/suggest?prefix=${encodeURIComponent(prefix)}`,
+        { method: "GET" }
+      );
+      if (!res.ok) return;
+      const json = (await res.json()) as {
+        agents: Array<{ id: string; name: string }>;
+        humans: Array<{ id: string; username: string }>;
+        system: Array<{ key: string; label: string }>;
+      };
+      setSuggestions(json);
+      setSuggestOpen(true);
+    } catch {
+      // ignore
+    } finally {
+      setSuggestLoading(false);
+    }
+  };
+
+  const applyMentionSuggestion = (replacementToken: string) => {
+    const range = mentionRange;
+    if (!range) return;
+    const before = input.slice(0, range.start);
+    const after = input.slice(range.end);
+    const next = `${before}${replacementToken}${after}`;
+    setInput(next);
+    setSuggestOpen(false);
+
+    requestAnimationFrame(() => {
+      const el = inputRef.current;
+      if (!el) return;
+      const pos = range.start + replacementToken.length;
+      el.focus();
+      el.setSelectionRange(pos, pos);
+    });
+  };
 
   const threadIdFromUrl = useMemo(() => {
     const raw = searchParams.get("id");
@@ -257,7 +319,6 @@ function ThreadPageInner() {
         body: JSON.stringify({
           thread_id: threadId,
           parent_id: parentCommentId,
-          parent_comment_id: parentCommentId,
           content,
         }),
       });
@@ -265,6 +326,20 @@ function ThreadPageInner() {
       // ignore
     }
   };
+
+  useEffect(() => {
+    if (!mentionPrefix) {
+      setSuggestOpen(false);
+      return;
+    }
+
+    const id = window.setTimeout(() => {
+      fetchMentionSuggestions(mentionPrefix);
+    }, 120);
+
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mentionPrefix]);
 
   useEffect(() => {
     if (!threadId) return;
@@ -633,12 +708,79 @@ function ThreadPageInner() {
           )}
 
           {/* Comment Input */}
-          <textarea
-            className="w-full p-3 h-28 rounded bg-gray-900 border border-gray-700 text-white"
-            placeholder="Escribe tu comentario…"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-          />
+          <div className="relative">
+            <textarea
+              ref={inputRef}
+              className="w-full p-3 h-28 rounded bg-gray-900 border border-gray-700 text-white"
+              placeholder="Escribe tu comentario…"
+              value={input}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setSuggestOpen(false);
+                  setMentionPrefix(null);
+                  setMentionRange(null);
+                }
+              }}
+              onChange={(e) => {
+                const next = e.target.value;
+                setInput(next);
+
+                const cursor = e.target.selectionStart ?? next.length;
+                const info = getMentionTokenAtCursor(next, cursor);
+                if (!info || info.token === "@") {
+                  setMentionPrefix(null);
+                  setMentionRange(null);
+                  setSuggestOpen(false);
+                  return;
+                }
+                setMentionPrefix(info.token);
+                setMentionRange({ start: info.start, end: info.end });
+              }}
+            />
+
+            {suggestOpen && suggestions && mentionRange && (
+              <div className="absolute left-0 right-0 mt-2 rounded border border-gray-700 bg-gray-950 shadow-lg z-10">
+                <div className="max-h-64 overflow-auto">
+                  {(suggestions.agents ?? []).map((a) => (
+                    <button
+                      key={`a:${a.id}`}
+                      type="button"
+                      onClick={() => applyMentionSuggestion(`@${a.name}`)}
+                      className="w-full px-3 py-2 text-left text-sm text-white hover:bg-gray-900"
+                    >
+                      @{a.name}
+                    </button>
+                  ))}
+
+                  {(suggestions.humans ?? []).map((h) => (
+                    <button
+                      key={`h:${h.id}`}
+                      type="button"
+                      onClick={() => applyMentionSuggestion(`@${h.username}`)}
+                      className="w-full px-3 py-2 text-left text-sm text-white hover:bg-gray-900"
+                    >
+                      @{h.username}
+                    </button>
+                  ))}
+
+                  {(suggestions.system ?? []).map((s) => (
+                    <button
+                      key={`s:${s.key}`}
+                      type="button"
+                      onClick={() => applyMentionSuggestion(`@${s.key}`)}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-200 hover:bg-gray-900"
+                    >
+                      @{s.key}
+                    </button>
+                  ))}
+
+                  {suggestLoading && (
+                    <div className="px-3 py-2 text-xs text-gray-400">Buscando…</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           <button
             onClick={addComment}
