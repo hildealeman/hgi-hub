@@ -11,6 +11,15 @@ interface Body {
   type?: string;
 }
 
+function normalizeInteraction(body: Body): InteractionType | null {
+  if (body.interaction === "like" || body.interaction === "dislike") return body.interaction;
+  const t = typeof body.type === "string" ? body.type : "";
+  if (t === "like" || t === "dislike") return t;
+  if (t === "upvote") return "like";
+  if (t === "downvote") return "dislike";
+  return null;
+}
+
 async function getServerSupabase() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -114,9 +123,9 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Body;
     const commentId = body.comment_id;
-    const interaction = body.interaction;
+    const interaction = normalizeInteraction(body);
 
-    if (!commentId || (interaction !== "like" && interaction !== "dislike")) {
+    if (!commentId || !interaction) {
       return NextResponse.json(
         { message: "Falta comment_id o interaction" },
         { status: 400 }
@@ -157,7 +166,10 @@ export async function POST(request: Request) {
     }
 
     if (existing?.id) {
-      const current = existing.interaction as InteractionType | null;
+      const current =
+        existing.interaction === "like" || existing.interaction === "dislike"
+          ? (existing.interaction as InteractionType)
+          : null;
 
       if (current === interaction) {
         // toggle off

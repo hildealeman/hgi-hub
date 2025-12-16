@@ -48,6 +48,12 @@ function avatarBorderClass(role: string | null | undefined): string {
   return "border-gray-700";
 }
 
+function quotedUuidInFilter(ids: string[]): string {
+  // PostgREST expects: ("uuid1","uuid2") for UUID IN filters.
+  const safe = (ids ?? []).filter((v) => typeof v === "string" && v.trim());
+  return `(${safe.map((v) => JSON.stringify(v)).join(",")})`;
+}
+
 function useCommentInteractions(
   commentId: string | null,
   initial?: { likes?: number; dislikes?: number }
@@ -493,10 +499,11 @@ function ThreadPageInner() {
     const agentById = new Map<string, any>();
     if (createdByIds.length > 0) {
       try {
+        const inFilter = quotedUuidInFilter(createdByIds);
         const { data: agents, error: agentError } = await supabase
           .from("agents")
           .select("id, name, provider, model")
-          .in("id", createdByIds);
+          .filter("id", "in", inFilter);
 
         if (agentError) {
           console.error("[HGI Hub] Error cargando agents batch", agentError);
@@ -519,10 +526,11 @@ function ThreadPageInner() {
       { likes: number; dislikes: number }
     >();
     if (commentIds.length > 0) {
+      const inFilter = quotedUuidInFilter(commentIds);
       const { data: interactions, error: interactionsError } = await supabase
         .from("comment_interactions")
         .select("comment_id, interaction")
-        .in("comment_id", commentIds);
+        .filter("comment_id", "in", inFilter);
 
       if (interactionsError) {
         console.error(
