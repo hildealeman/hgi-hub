@@ -391,9 +391,12 @@ function ThreadPageInner() {
       return;
     }
 
+    const newCommentId = crypto.randomUUID();
+
     const { data, error } = await supabase
       .from("comments")
       .insert({
+        id: newCommentId,
         thread_id: threadId,
         parent_id: null,
         content: input,
@@ -430,9 +433,12 @@ function ThreadPageInner() {
       return;
     }
 
+    const newReplyId = crypto.randomUUID();
+
     const { data: inserted, error } = await supabase
       .from("comments")
       .insert({
+        id: newReplyId,
         thread_id: threadId,
         parent_id: parentId,
         content: replyText,
